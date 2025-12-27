@@ -13,9 +13,7 @@ import type {
   AgentToolCall,
   AgentSessionEvent,
   AgentSessionEventCallback,
-  ProviderType,
 } from './types.js';
-import { getModelConfigForTier, detectProviderType } from './types.js';
 import type { SpecializedAgent } from '../specialized/types.js';
 import type { Config } from '../../config/config.js';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
@@ -80,9 +78,9 @@ export class AgentSession {
     this.emit({ type: 'task_started', sessionId: this.sessionId, task });
 
     try {
-      // Get model config based on agent's tier and current provider
-      const modelConfig = getModelConfigForTier(this.agent.modelTier);
-      
+      // Use the user-selected model from CLI config (best quality, no tier-based selection)
+      const selectedModel = this.config.getModel();
+
       // Build the system instruction with agent's specialized prompt
       const systemInstruction = this.buildSystemInstruction();
 
@@ -93,16 +91,16 @@ export class AgentSession {
       };
       this.history.push(userContent);
 
-      // Make the API call
+      // Make the API call with user's selected model
       const response = await this.contentGenerator.generateContent(
         {
-          model: modelConfig.modelName,
+          model: selectedModel,
           contents: this.history,
           config: {
             systemInstruction,
             tools: this.tools,
-            maxOutputTokens: modelConfig.maxOutputTokens,
-            temperature: modelConfig.temperature,
+            maxOutputTokens: 32768, // Max quality output
+            temperature: 0.7,
             abortSignal,
           },
         },
