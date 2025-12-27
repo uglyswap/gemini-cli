@@ -78,6 +78,16 @@ export interface GeminiConfig {
 }
 
 /**
+ * Current config version
+ */
+const CURRENT_CONFIG_VERSION = '1.1';
+
+/**
+ * Model cache TTL in hours
+ */
+const MODEL_CACHE_TTL_HOURS = 24;
+
+/**
  * Default configuration
  * Note: activeProvider is empty string until a provider is configured
  * This prevents inconsistent state where activeProvider points to non-existent provider
@@ -92,16 +102,6 @@ const DEFAULT_CONFIG: GeminiConfig = {
     theme: 'default',
   },
 };
-
-/**
- * Model cache TTL in hours
- */
-const MODEL_CACHE_TTL_HOURS = 24;
-
-/**
- * Current config version
- */
-const CURRENT_CONFIG_VERSION = '1.1';
 
 /**
  * Migrate configuration from older versions
