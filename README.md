@@ -3,7 +3,8 @@
 [![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
 [![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
 
-> **This fork adds support for OpenAI-compatible providers (Z.AI, OpenRouter, Ollama, LM Studio) without requiring Google authentication.**
+> **This fork adds support for OpenAI-compatible providers (Z.AI, OpenRouter,
+> Ollama, LM Studio) without requiring Google authentication.**
 
 ![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
 
@@ -13,10 +14,13 @@ into your terminal. This fork extends it to work with any OpenAI-compatible API.
 ## 🆕 What's New in This Fork
 
 - ✅ **No Google authentication required** when using external providers
+- ✅ **Interactive `/provider` command** - Configure providers directly in the
+  CLI
 - ✅ **Z.AI support** with GLM-4.7 model
 - ✅ **OpenRouter support** for 100+ models
 - ✅ **Ollama support** for local inference
 - ✅ **LM Studio support** for local models
+- ✅ **12 pre-configured providers** with dynamic model fetching
 - ✅ Streaming and function/tool calling support
 - ✅ Backward compatible with original Google auth
 
@@ -31,15 +35,73 @@ cd gemini-cli
 npm install
 npm run build
 
-# 3. Configure Z.AI
-export OPENAI_COMPATIBLE_API_KEY="your_zai_api_key"
-export OPENAI_COMPATIBLE_BASE_URL="https://api.z.ai/api/coding/paas/v4"
-
-# 4. Run
+# 3. Run and configure interactively
 npm start
+# Then use /provider command to configure
 ```
 
-## 🔐 Authentication Options
+## ⚙️ Interactive Provider Configuration (NEW)
+
+The easiest way to configure providers is through the interactive `/provider`
+command:
+
+```bash
+# Open the configuration dialog
+/provider
+
+# Or configure a specific provider directly
+/provider openrouter
+```
+
+### Available Commands
+
+| Command                 | Description                           |
+| ----------------------- | ------------------------------------- |
+| `/provider`             | Open interactive configuration dialog |
+| `/provider list`        | List all configured providers         |
+| `/provider switch <id>` | Switch to a different provider        |
+| `/provider remove <id>` | Remove a provider configuration       |
+| `/provider status`      | Show current provider status          |
+
+### Supported Providers (12)
+
+| Provider          | Type   | Description                         |
+| ----------------- | ------ | ----------------------------------- |
+| **Google Gemini** | Cloud  | Google's Gemini models              |
+| **OpenRouter**    | Cloud  | 100+ models from multiple providers |
+| **Z.AI**          | Cloud  | GLM-4 models                        |
+| **OpenAI**        | Cloud  | GPT-4, GPT-4o, o1 models            |
+| **Anthropic**     | Cloud  | Claude 3.5, Claude 3 models         |
+| **Groq**          | Cloud  | Ultra-fast inference                |
+| **Together AI**   | Cloud  | Open-source models                  |
+| **Mistral AI**    | Cloud  | Mistral Large, Codestral            |
+| **DeepSeek**      | Cloud  | DeepSeek Coder, Chat                |
+| **Ollama**        | Local  | Run models locally                  |
+| **LM Studio**     | Local  | Local model server                  |
+| **Custom**        | Custom | Any OpenAI-compatible endpoint      |
+
+### Configuration Storage
+
+Configuration is stored in `~/.gemini/config.json`:
+
+```json
+{
+  "version": "1.0",
+  "activeProvider": "openrouter",
+  "providers": {
+    "openrouter": {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "apiKey": "sk-or-v1-...",
+      "model": "anthropic/claude-3.5-sonnet"
+    }
+  }
+}
+```
+
+## 🔐 Authentication Options (Environment Variables)
+
+You can also configure providers via environment variables:
 
 ### Option 1: Z.AI (GLM-4.7) — No Google Account Needed
 
@@ -88,20 +150,20 @@ See [Authentication Guide](./docs/get-started/authentication.md) for details.
 
 ## 📋 Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_COMPATIBLE_BASE_URL` | Yes* | API endpoint URL |
-| `OPENAI_COMPATIBLE_API_KEY` | Yes* | API key |
-| `OPENAI_COMPATIBLE_MODEL` | No | Override model name |
+| Variable                     | Required | Description         |
+| ---------------------------- | -------- | ------------------- |
+| `OPENAI_COMPATIBLE_BASE_URL` | Yes\*    | API endpoint URL    |
+| `OPENAI_COMPATIBLE_API_KEY`  | Yes\*    | API key             |
+| `OPENAI_COMPATIBLE_MODEL`    | No       | Override model name |
 
-*Required only when using OpenAI-compatible providers.
+\*Required only when using OpenAI-compatible providers.
 
 ### Legacy Variables (Also Supported)
 
-| Variable | Maps To |
-|----------|--------|
+| Variable              | Maps To                      |
+| --------------------- | ---------------------------- |
 | `OPENROUTER_BASE_URL` | `OPENAI_COMPATIBLE_BASE_URL` |
-| `OPENROUTER_API_KEY` | `OPENAI_COMPATIBLE_API_KEY` |
+| `OPENROUTER_API_KEY`  | `OPENAI_COMPATIBLE_API_KEY`  |
 
 ## 📦 Installation
 
@@ -143,13 +205,17 @@ npm link  # Optional: install globally
 
 ## 🤖 Agentic Mode (NEW)
 
-This fork includes an **enhanced multi-agent orchestration system** that's **enabled by default**.
+This fork includes an **enhanced multi-agent orchestration system** that's
+**enabled by default**.
 
 ### What is Agentic Mode?
 
-Agentic mode uses **28 specialized AI agents** organized into **8 domain teams** that work together to complete complex tasks. Each agent has deep expertise in its domain and collaborates with others when needed.
+Agentic mode uses **28 specialized AI agents** organized into **8 domain teams**
+that work together to complete complex tasks. Each agent has deep expertise in
+its domain and collaborates with others when needed.
 
-**All agents use your selected model** for maximum quality - no tier-based degradation.
+**All agents use your selected model** for maximum quality - no tier-based
+degradation.
 
 ### 🏗️ System Architecture
 
@@ -175,85 +241,87 @@ Agentic mode uses **28 specialized AI agents** organized into **8 domain teams**
 
 #### 🎨 Frontend Team (5 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Frontend Developer** | React, TypeScript, Tailwind, components | `react`, `component`, `ui`, `tsx`, `tailwind` |
-| **UI/UX Designer** | Design systems, themes, layouts | `design`, `style`, `layout`, `ux`, `theme` |
-| **Accessibility Expert** | WCAG, ARIA, screen readers | `a11y`, `accessibility`, `wcag`, `aria` |
-| **Performance Optimizer** | Core Web Vitals, bundle optimization | `performance`, `optimize`, `lighthouse`, `lcp` |
-| **Animation Specialist** | Framer Motion, GSAP, transitions | `animation`, `transition`, `motion`, `framer` |
+| Agent                     | Specialization                          | Trigger Keywords                               |
+| ------------------------- | --------------------------------------- | ---------------------------------------------- |
+| **Frontend Developer**    | React, TypeScript, Tailwind, components | `react`, `component`, `ui`, `tsx`, `tailwind`  |
+| **UI/UX Designer**        | Design systems, themes, layouts         | `design`, `style`, `layout`, `ux`, `theme`     |
+| **Accessibility Expert**  | WCAG, ARIA, screen readers              | `a11y`, `accessibility`, `wcag`, `aria`        |
+| **Performance Optimizer** | Core Web Vitals, bundle optimization    | `performance`, `optimize`, `lighthouse`, `lcp` |
+| **Animation Specialist**  | Framer Motion, GSAP, transitions        | `animation`, `transition`, `motion`, `framer`  |
 
 #### ⚙️ Backend Team (5 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Backend Developer** | Node.js APIs, Express, Fastify, Hono | `api`, `endpoint`, `server`, `middleware` |
-| **API Architect** | OpenAPI, versioning, rate limiting | `architecture`, `api design`, `swagger` |
-| **Microservices Expert** | Kafka, RabbitMQ, CQRS, Saga | `microservice`, `distributed`, `event-driven` |
-| **Integration Specialist** | OAuth, webhooks, third-party APIs | `integration`, `webhook`, `oauth`, `stripe` |
-| **GraphQL Developer** | Apollo, resolvers, subscriptions | `graphql`, `query`, `mutation`, `resolver` |
+| Agent                      | Specialization                       | Trigger Keywords                              |
+| -------------------------- | ------------------------------------ | --------------------------------------------- |
+| **Backend Developer**      | Node.js APIs, Express, Fastify, Hono | `api`, `endpoint`, `server`, `middleware`     |
+| **API Architect**          | OpenAPI, versioning, rate limiting   | `architecture`, `api design`, `swagger`       |
+| **Microservices Expert**   | Kafka, RabbitMQ, CQRS, Saga          | `microservice`, `distributed`, `event-driven` |
+| **Integration Specialist** | OAuth, webhooks, third-party APIs    | `integration`, `webhook`, `oauth`, `stripe`   |
+| **GraphQL Developer**      | Apollo, resolvers, subscriptions     | `graphql`, `query`, `mutation`, `resolver`    |
 
 #### 🗄️ Database Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Database Architect** | PostgreSQL, Prisma, Drizzle, RLS | `database`, `schema`, `postgres`, `prisma` |
-| **Query Optimizer** | Execution plans, indexes, N+1 | `query`, `slow query`, `index`, `explain` |
-| **Migration Specialist** | Zero-downtime migrations, rollbacks | `migration`, `schema change`, `rollback` |
+| Agent                    | Specialization                      | Trigger Keywords                           |
+| ------------------------ | ----------------------------------- | ------------------------------------------ |
+| **Database Architect**   | PostgreSQL, Prisma, Drizzle, RLS    | `database`, `schema`, `postgres`, `prisma` |
+| **Query Optimizer**      | Execution plans, indexes, N+1       | `query`, `slow query`, `index`, `explain`  |
+| **Migration Specialist** | Zero-downtime migrations, rollbacks | `migration`, `schema change`, `rollback`   |
 
 #### 🔒 Security Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Security Engineer** | OWASP Top 10, Auth, RLS, encryption | `security`, `auth`, `owasp`, `xss`, `injection` |
-| **Penetration Tester** | Vulnerability scanning, threat modeling | `pentest`, `vulnerability`, `security audit` |
-| **Compliance Auditor** | GDPR, HIPAA, SOC2, PCI | `compliance`, `gdpr`, `hipaa`, `privacy` |
+| Agent                  | Specialization                          | Trigger Keywords                                |
+| ---------------------- | --------------------------------------- | ----------------------------------------------- |
+| **Security Engineer**  | OWASP Top 10, Auth, RLS, encryption     | `security`, `auth`, `owasp`, `xss`, `injection` |
+| **Penetration Tester** | Vulnerability scanning, threat modeling | `pentest`, `vulnerability`, `security audit`    |
+| **Compliance Auditor** | GDPR, HIPAA, SOC2, PCI                  | `compliance`, `gdpr`, `hipaa`, `privacy`        |
 
 #### 🧪 Testing Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Test Engineer** | Jest, Vitest, TDD, mocking | `test`, `unit test`, `coverage`, `jest` |
-| **E2E Tester** | Playwright, Cypress, visual regression | `e2e`, `playwright`, `cypress`, `browser test` |
-| **Code Reviewer** | Code quality, SOLID, technical debt | `review`, `code review`, `refactor`, `quality` |
+| Agent             | Specialization                         | Trigger Keywords                               |
+| ----------------- | -------------------------------------- | ---------------------------------------------- |
+| **Test Engineer** | Jest, Vitest, TDD, mocking             | `test`, `unit test`, `coverage`, `jest`        |
+| **E2E Tester**    | Playwright, Cypress, visual regression | `e2e`, `playwright`, `cypress`, `browser test` |
+| **Code Reviewer** | Code quality, SOLID, technical debt    | `review`, `code review`, `refactor`, `quality` |
 
 #### 🚀 DevOps Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **DevOps Engineer** | Docker, Kubernetes, monitoring | `devops`, `deploy`, `docker`, `kubernetes` |
-| **Infrastructure Architect** | Terraform, AWS, GCP, Azure, IaC | `infrastructure`, `terraform`, `aws`, `vpc` |
-| **CI/CD Specialist** | GitHub Actions, GitLab CI, pipelines | `ci`, `cd`, `github actions`, `pipeline` |
+| Agent                        | Specialization                       | Trigger Keywords                            |
+| ---------------------------- | ------------------------------------ | ------------------------------------------- |
+| **DevOps Engineer**          | Docker, Kubernetes, monitoring       | `devops`, `deploy`, `docker`, `kubernetes`  |
+| **Infrastructure Architect** | Terraform, AWS, GCP, Azure, IaC      | `infrastructure`, `terraform`, `aws`, `vpc` |
+| **CI/CD Specialist**         | GitHub Actions, GitLab CI, pipelines | `ci`, `cd`, `github actions`, `pipeline`    |
 
 #### 🤖 AI/ML Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **AI Engineer** | LLM APIs, LangChain, RAG, embeddings | `ai`, `llm`, `openai`, `langchain`, `rag` |
-| **MLOps Specialist** | Model training, serving, experiment tracking | `mlops`, `model`, `training`, `inference` |
-| **Prompt Engineer** | System prompts, few-shot, chain-of-thought | `prompt`, `prompt engineering`, `template` |
+| Agent                | Specialization                               | Trigger Keywords                           |
+| -------------------- | -------------------------------------------- | ------------------------------------------ |
+| **AI Engineer**      | LLM APIs, LangChain, RAG, embeddings         | `ai`, `llm`, `openai`, `langchain`, `rag`  |
+| **MLOps Specialist** | Model training, serving, experiment tracking | `mlops`, `model`, `training`, `inference`  |
+| **Prompt Engineer**  | System prompts, few-shot, chain-of-thought   | `prompt`, `prompt engineering`, `template` |
 
 #### 📚 Documentation Team (3 agents)
 
-| Agent | Specialization | Trigger Keywords |
-|-------|----------------|------------------|
-| **Technical Writer** | README, tutorials, guides | `documentation`, `readme`, `docs`, `guide` |
-| **API Documenter** | OpenAPI specs, Postman collections | `api docs`, `swagger`, `api reference` |
-| **Architecture Documenter** | ADRs, C4 diagrams, system design | `adr`, `architecture decision`, `diagram` |
+| Agent                       | Specialization                     | Trigger Keywords                           |
+| --------------------------- | ---------------------------------- | ------------------------------------------ |
+| **Technical Writer**        | README, tutorials, guides          | `documentation`, `readme`, `docs`, `guide` |
+| **API Documenter**          | OpenAPI specs, Postman collections | `api docs`, `swagger`, `api reference`     |
+| **Architecture Documenter** | ADRs, C4 diagrams, system design   | `adr`, `architecture decision`, `diagram`  |
 
 ### 🛡️ Trust Cascade System
 
-Agents earn trust through successful task completion. Trust level determines autonomy:
+Agents earn trust through successful task completion. Trust level determines
+autonomy:
 
-| Level | Name | Requirements | Privileges |
-|-------|------|--------------|------------|
+| Level  | Name              | Requirements           | Privileges                                    |
+| ------ | ----------------- | ---------------------- | --------------------------------------------- |
 | **L4** | Autonomous Expert | 50+ tasks, 95% success | Skip reviews, auto-approve, 5 parallel agents |
-| **L3** | Trusted Agent | 20+ tasks, 85% success | Standard oversight, 3 parallel agents |
-| **L2** | Guided Agent | 5+ tasks, 70% success | Full quality checks, 2 parallel agents |
-| **L1** | Supervised | New agent | Enhanced supervision, 1 agent at a time |
-| **L0** | Quarantine | Critical failures | Disabled, read-only |
+| **L3** | Trusted Agent     | 20+ tasks, 85% success | Standard oversight, 3 parallel agents         |
+| **L2** | Guided Agent      | 5+ tasks, 70% success  | Full quality checks, 2 parallel agents        |
+| **L1** | Supervised        | New agent              | Enhanced supervision, 1 agent at a time       |
+| **L0** | Quarantine        | Critical failures      | Disabled, read-only                           |
 
-**Trust builds automatically** - successful executions promote agents, failures demote them.
+**Trust builds automatically** - successful executions promote agents, failures
+demote them.
 
 ### ⚡ 6-Phase Execution Workflow
 
@@ -277,15 +345,15 @@ Agents earn trust through successful task completion. Trust level determines aut
 
 Built-in quality checks run automatically:
 
-| Gate | Timing | Description |
-|------|--------|-------------|
-| **TypeScript** | Post | Type checking with `tsc --noEmit` |
-| **ESLint** | Post | Code quality with configured rules |
-| **Security Scan** | Post | `npm audit` for vulnerabilities |
-| **Secrets Detection** | Pre | Scan for API keys, passwords, tokens |
-| **Test Coverage** | Post | Jest/Vitest coverage thresholds |
-| **File Size** | Post | Warn about files > 500KB |
-| **Complexity** | Post | Function/file length analysis |
+| Gate                  | Timing | Description                          |
+| --------------------- | ------ | ------------------------------------ |
+| **TypeScript**        | Post   | Type checking with `tsc --noEmit`    |
+| **ESLint**            | Post   | Code quality with configured rules   |
+| **Security Scan**     | Post   | `npm audit` for vulnerabilities      |
+| **Secrets Detection** | Pre    | Scan for API keys, passwords, tokens |
+| **Test Coverage**     | Post   | Jest/Vitest coverage thresholds      |
+| **File Size**         | Post   | Warn about files > 500KB             |
+| **Complexity**        | Post   | Function/file length analysis        |
 
 ### 🔧 Quick Commands
 
@@ -312,11 +380,12 @@ Built-in quality checks run automatically:
 ### ⚙️ Configuration
 
 In your `GEMINI.md`:
+
 ```yaml
-enableAgentic: true           # Enable/disable (default: true)
-agenticSnapshots: true        # Code snapshots for rollback
-agenticMaxSessions: 5         # Max concurrent agent sessions
-agenticQualityGates:          # Quality checks to run
+enableAgentic: true # Enable/disable (default: true)
+agenticSnapshots: true # Code snapshots for rollback
+agenticMaxSessions: 5 # Max concurrent agent sessions
+agenticQualityGates: # Quality checks to run
   - typescript
   - eslint
   - security-scan
@@ -324,21 +393,22 @@ agenticQualityGates:          # Quality checks to run
 ```
 
 Or via environment:
+
 ```bash
 export GEMINI_AGENTIC_MODE=false  # Disable agentic mode
 ```
 
 ### 🎯 Key Benefits
 
-| Benefit | Description |
-|---------|-------------|
+| Benefit                 | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
 | **Best Quality Always** | All agents use your selected model (no flash/pro switching) |
-| **Context Isolation** | Each agent has its own session, preventing context overflow |
-| **Trust System** | Agents build reputation through successful task completion |
-| **Quality Gates** | Automatic TypeScript/ESLint/security checks |
-| **Snapshots** | Automatic code backups with easy rollback |
-| **Multi-Provider** | Works with Gemini, Z.AI, OpenRouter, Ollama, LM Studio |
-| **Domain Expertise** | 28 specialized agents covering all development areas |
+| **Context Isolation**   | Each agent has its own session, preventing context overflow |
+| **Trust System**        | Agents build reputation through successful task completion  |
+| **Quality Gates**       | Automatic TypeScript/ESLint/security checks                 |
+| **Snapshots**           | Automatic code backups with easy rollback                   |
+| **Multi-Provider**      | Works with Gemini, Z.AI, OpenRouter, Ollama, LM Studio      |
+| **Domain Expertise**    | 28 specialized agents covering all development areas        |
 
 ## 🚀 Usage Examples
 
@@ -378,13 +448,16 @@ gemini -p "List all functions" --output-format json
 
 ## 🔗 Links
 
-- **Original Repo**: [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli)
+- **Original Repo**:
+  [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli)
 - **Z.AI Docs**: [docs.z.ai](https://docs.z.ai)
 - **OpenRouter**: [openrouter.ai](https://openrouter.ai)
 
 ## 🤝 Contributing
 
-Contributions welcome! This fork is based on the original [Gemini CLI](https://github.com/google-gemini/gemini-cli) which is Apache 2.0 licensed.
+Contributions welcome! This fork is based on the original
+[Gemini CLI](https://github.com/google-gemini/gemini-cli) which is Apache 2.0
+licensed.
 
 ## 📄 License
 
