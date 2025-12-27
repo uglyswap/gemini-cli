@@ -13,8 +13,9 @@ import type {
   AgentToolCall,
   AgentSessionEvent,
   AgentSessionEventCallback,
+  ProviderType,
 } from './types.js';
-import { MODEL_TIER_CONFIGS } from './types.js';
+import { getModelConfigForTier, detectProviderType } from './types.js';
 import type { SpecializedAgent } from '../specialized/types.js';
 import type { Config } from '../../config/config.js';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
@@ -79,8 +80,8 @@ export class AgentSession {
     this.emit({ type: 'task_started', sessionId: this.sessionId, task });
 
     try {
-      // Get model config based on agent's tier
-      const modelConfig = MODEL_TIER_CONFIGS[this.agent.modelTier];
+      // Get model config based on agent's tier and current provider
+      const modelConfig = getModelConfigForTier(this.agent.modelTier);
       
       // Build the system instruction with agent's specialized prompt
       const systemInstruction = this.buildSystemInstruction();

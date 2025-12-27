@@ -141,6 +141,76 @@ npm link  # Optional: install globally
 - 🔧 Web fetching and Google Search grounding
 - 🔧 MCP (Model Context Protocol) support
 
+## 🤖 Agentic Mode (NEW)
+
+This fork includes an **enhanced multi-agent orchestration system** that's **enabled by default**.
+
+### What is Agentic Mode?
+
+Agentic mode uses specialized AI agents that work together to complete complex tasks:
+
+| Agent | Role | Model Tier |
+|-------|------|------------|
+| **Code Agent** | Writes and modifies code | pro |
+| **Test Agent** | Creates and runs tests | pro |
+| **Review Agent** | Reviews code quality | flash |
+| **Debug Agent** | Diagnoses and fixes bugs | pro |
+| **Docs Agent** | Writes documentation | flash |
+
+### Key Benefits
+
+- **Context Isolation**: Each agent has its own session, preventing context overflow
+- **Trust System**: Agents build reputation through successful task completion
+- **Quality Gates**: Optional TypeScript/ESLint checks before applying changes
+- **Snapshots**: Automatic code backups for easy rollback
+- **Multi-Provider**: Works with Gemini, OpenAI-compatible APIs, Ollama, and OpenRouter
+
+### Quick Commands
+
+```bash
+# Check agentic status
+/agentic status
+
+# Disable agentic mode
+/agentic disable
+
+# Execute a task with agents
+/agentic implement user authentication with JWT
+
+# View agent trust scores
+/agentic trust
+
+# List available agents
+/agentic agents
+```
+
+### Configuration
+
+In your `GEMINI.md`:
+```yaml
+enableAgentic: true        # Enable/disable (default: true)
+agenticSnapshots: true     # Code snapshots for rollback
+agenticQualityGates:       # Quality checks to run
+  - typescript
+  - eslint
+```
+
+Or via environment:
+```bash
+export GEMINI_AGENTIC_MODE=false  # Disable agentic mode
+```
+
+### Provider-Specific Models
+
+Agentic mode automatically selects appropriate models based on your provider:
+
+| Provider | Flash Model | Pro Model |
+|----------|-------------|-----------|
+| Gemini | gemini-2.5-flash | gemini-2.5-pro |
+| Z.AI (GLM) | glm-4-flash | glm-4.7 |
+| Ollama | llama3.2 | llama3.1 |
+| OpenRouter | google/gemini-2.5-flash | anthropic/claude-3.5-sonnet |
+
 ## 🚀 Usage Examples
 
 ### Start in current directory
