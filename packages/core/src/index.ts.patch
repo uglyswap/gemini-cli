@@ -1,0 +1,10 @@
+// Add to the exports in packages/core/src/index.ts:
+// 
+// After the existing exports, add:
+// export {
+//   isOpenAICompatibleConfigured,
+//   getOpenAICompatibleAuthType,
+// } from './core/contentGenerator.js';
+//
+// This patch file documents what needs to be manually added to index.ts
+// The actual index.ts file is auto-generated, so this documents the required change.

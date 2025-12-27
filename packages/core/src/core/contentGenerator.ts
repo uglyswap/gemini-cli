@@ -52,6 +52,8 @@ export enum AuthType {
   USE_VERTEX_AI = 'vertex-ai',
   LEGACY_CLOUD_SHELL = 'cloud-shell',
   COMPUTE_ADC = 'compute-default-credentials',
+  /** OpenAI-compatible providers (Z.AI, OpenRouter, Ollama, LM Studio, etc.) */
+  USE_OPENAI_COMPATIBLE = 'openai-compatible',
 }
 
 export type ContentGeneratorConfig = {
@@ -59,7 +61,31 @@ export type ContentGeneratorConfig = {
   vertexai?: boolean;
   authType?: AuthType;
   proxy?: string;
+  /** Base URL for OpenAI-compatible providers */
+  openAICompatibleBaseUrl?: string;
+  /** Model name override for OpenAI-compatible providers */
+  openAICompatibleModel?: string;
 };
+
+/**
+ * Checks if OpenAI-compatible provider is configured via environment variables
+ */
+export function isOpenAICompatibleConfigured(): boolean {
+  return !!(
+    process.env['OPENAI_COMPATIBLE_BASE_URL'] ||
+    process.env['OPENROUTER_BASE_URL']
+  );
+}
+
+/**
+ * Gets the OpenAI-compatible auth type from environment if configured
+ */
+export function getOpenAICompatibleAuthType(): AuthType | undefined {
+  if (isOpenAICompatibleConfigured()) {
+    return AuthType.USE_OPENAI_COMPATIBLE;
+  }
+  return undefined;
+}
 
 export async function createContentGeneratorConfig(
   config: Config,
@@ -74,10 +100,30 @@ export async function createContentGeneratorConfig(
     undefined;
   const googleCloudLocation = process.env['GOOGLE_CLOUD_LOCATION'] || undefined;
 
+  // OpenAI-compatible provider configuration
+  const openAICompatibleApiKey =
+    process.env['OPENAI_COMPATIBLE_API_KEY'] ||
+    process.env['OPENROUTER_API_KEY'] ||
+    undefined;
+  const openAICompatibleBaseUrl =
+    process.env['OPENAI_COMPATIBLE_BASE_URL'] ||
+    process.env['OPENROUTER_BASE_URL'] ||
+    undefined;
+  const openAICompatibleModel =
+    process.env['OPENAI_COMPATIBLE_MODEL'] || undefined;
+
   const contentGeneratorConfig: ContentGeneratorConfig = {
     authType,
     proxy: config?.getProxy(),
   };
+
+  // OpenAI-compatible providers take priority when configured
+  if (authType === AuthType.USE_OPENAI_COMPATIBLE && openAICompatibleBaseUrl) {
+    contentGeneratorConfig.apiKey = openAICompatibleApiKey;
+    contentGeneratorConfig.openAICompatibleBaseUrl = openAICompatibleBaseUrl;
+    contentGeneratorConfig.openAICompatibleModel = openAICompatibleModel;
+    return contentGeneratorConfig;
+  }
 
   // If we are using Google auth or we are in Cloud Shell, there is nothing else to validate for now
   if (
@@ -116,6 +162,38 @@ export async function createContentGenerator(
     if (gcConfig.fakeResponses) {
       return FakeContentGenerator.fromFile(gcConfig.fakeResponses);
     }
+
+    // Handle OpenAI-compatible providers (Z.AI, OpenRouter, Ollama, etc.)
+    if (
+      config.authType === AuthType.USE_OPENAI_COMPATIBLE &&
+      config.openAICompatibleBaseUrl
+    ) {
+      const { createOpenAICompatibleContentGenerator } = await import(
+        './openAICompatibleGenerator.js'
+      );
+      const version = await getVersion();
+      const model = resolveModel(
+        gcConfig.getModel(),
+        gcConfig.getPreviewFeatures(),
+      );
+      return new LoggingContentGenerator(
+        createOpenAICompatibleContentGenerator(
+          {
+            ...config,
+            model,
+            openAICompatibleBaseUrl: config.openAICompatibleBaseUrl,
+            openAICompatibleModel: config.openAICompatibleModel,
+          },
+          {
+            headers: {
+              'User-Agent': `GeminiCLI/${version}/${model} (${process.platform}; ${process.arch})`,
+            },
+          },
+        ),
+        gcConfig,
+      );
+    }
+
     const version = await getVersion();
     const model = resolveModel(
       gcConfig.getModel(),
