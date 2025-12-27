@@ -30,9 +30,10 @@ export interface HybridModeConfig {
 
 /**
  * Default configuration for hybrid mode
+ * NOTE: Agentic mode is ENABLED by default for enhanced multi-agent orchestration
  */
 export const DEFAULT_HYBRID_CONFIG: HybridModeConfig = {
-  enabled: false,
+  enabled: true, // Enabled by default
   enableSnapshots: true,
   qualityGates: ['typescript', 'eslint'],
   maxConcurrentSessions: 5,
@@ -41,12 +42,15 @@ export const DEFAULT_HYBRID_CONFIG: HybridModeConfig = {
 
 /**
  * Manager for hybrid/agentic mode in gemini-cli
- * 
+ *
  * This class provides the integration point between gemini-cli and the
- * enhanced agent orchestration system. It can be enabled via:
- * - GEMINI.md configuration: `enableAgentic: true`
- * - Environment variable: `GEMINI_AGENTIC_MODE=true`
- * - CLI flag: `--agentic`
+ * enhanced agent orchestration system. Agentic mode is ENABLED by default.
+ *
+ * To disable, use one of:
+ * - GEMINI.md configuration: `enableAgentic: false`
+ * - Environment variable: `GEMINI_AGENTIC_MODE=false`
+ * - CLI flag: `--no-agentic`
+ * - In-session command: `/agentic disable`
  */
 export class HybridModeManager {
   private orchestrator: EnhancedAgentOrchestrator | null = null;
@@ -176,12 +180,15 @@ export function parseHybridConfig(
 ): HybridModeConfig {
   const config = { ...DEFAULT_HYBRID_CONFIG };
 
-  // Check environment variable
-  if (env?.['GEMINI_AGENTIC_MODE'] === 'true') {
+  // Check environment variable (can enable or disable)
+  const envAgenticMode = env?.['GEMINI_AGENTIC_MODE'];
+  if (envAgenticMode === 'true') {
     config.enabled = true;
+  } else if (envAgenticMode === 'false') {
+    config.enabled = false;
   }
 
-  // Parse GEMINI.md configuration
+  // Parse GEMINI.md configuration (overrides env)
   if (geminiMdConfig) {
     if (typeof geminiMdConfig['enableAgentic'] === 'boolean') {
       config.enabled = geminiMdConfig['enableAgentic'];

@@ -104,27 +104,104 @@ export interface ModelConfig {
 }
 
 /**
- * Model tier configurations
+ * Provider type for model resolution
  */
-export const MODEL_TIER_CONFIGS: Record<ModelTier, ModelConfig> = {
+export type ProviderType = 'gemini' | 'openai-compatible' | 'ollama' | 'openrouter';
+
+/**
+ * Provider-specific model mappings
+ */
+export const PROVIDER_MODEL_MAPPINGS: Record<ProviderType, Record<ModelTier, string>> = {
+  gemini: {
+    flash: 'gemini-2.5-flash',
+    pro: 'gemini-2.5-pro',
+    ultra: 'gemini-2.5-pro',
+  },
+  'openai-compatible': {
+    flash: 'glm-4-flash',
+    pro: 'glm-4.7',
+    ultra: 'glm-4.7',
+  },
+  ollama: {
+    flash: 'llama3.2',
+    pro: 'llama3.1',
+    ultra: 'mixtral',
+  },
+  openrouter: {
+    flash: 'google/gemini-2.5-flash',
+    pro: 'anthropic/claude-3.5-sonnet',
+    ultra: 'anthropic/claude-3.5-sonnet',
+  },
+};
+
+/**
+ * Default model tier configurations (without hardcoded model names)
+ */
+export const DEFAULT_TIER_SETTINGS: Record<ModelTier, Omit<ModelConfig, 'modelName'>> = {
   flash: {
-    modelName: 'gemini-2.0-flash',
     maxOutputTokens: 8192,
     temperature: 0.7,
     thinkingEnabled: false,
   },
   pro: {
-    modelName: 'gemini-2.5-pro-preview-06-05',
     maxOutputTokens: 16384,
     temperature: 0.7,
     thinkingEnabled: true,
   },
   ultra: {
-    modelName: 'gemini-2.5-pro-preview-06-05',
     maxOutputTokens: 32768,
     temperature: 0.5,
     thinkingEnabled: true,
   },
+};
+
+/**
+ * Detect provider type from environment variables
+ */
+export function detectProviderType(): ProviderType {
+  const baseUrl = process.env['OPENAI_COMPATIBLE_BASE_URL'] || process.env['OPENROUTER_BASE_URL'] || '';
+
+  if (baseUrl.includes('openrouter.ai')) {
+    return 'openrouter';
+  }
+  if (baseUrl.includes('localhost:11434') || baseUrl.includes('ollama')) {
+    return 'ollama';
+  }
+  if (baseUrl) {
+    return 'openai-compatible';
+  }
+  return 'gemini';
+}
+
+/**
+ * Get model configuration for a specific tier, respecting the current provider
+ */
+export function getModelConfigForTier(
+  tier: ModelTier,
+  providerOverride?: ProviderType,
+  modelOverride?: string,
+): ModelConfig {
+  const provider = providerOverride ?? detectProviderType();
+  const tierSettings = DEFAULT_TIER_SETTINGS[tier];
+
+  // Allow explicit model override from environment or config
+  const envModel = process.env['OPENAI_COMPATIBLE_MODEL'];
+  const modelName = modelOverride ?? envModel ?? PROVIDER_MODEL_MAPPINGS[provider][tier];
+
+  return {
+    modelName,
+    ...tierSettings,
+  };
+}
+
+/**
+ * Legacy: Model tier configurations (for backward compatibility)
+ * @deprecated Use getModelConfigForTier() instead for multi-provider support
+ */
+export const MODEL_TIER_CONFIGS: Record<ModelTier, ModelConfig> = {
+  flash: getModelConfigForTier('flash'),
+  pro: getModelConfigForTier('pro'),
+  ultra: getModelConfigForTier('ultra'),
 };
 
 /**
