@@ -147,18 +147,21 @@ This fork includes an **enhanced multi-agent orchestration system** that's **ena
 
 ### What is Agentic Mode?
 
-Agentic mode uses specialized AI agents that work together to complete complex tasks:
+Agentic mode uses specialized AI agents that work together to complete complex tasks.
+**All agents use your selected model** for maximum quality - no tier-based degradation.
 
-| Agent | Role | Model Tier |
-|-------|------|------------|
-| **Code Agent** | Writes and modifies code | pro |
-| **Test Agent** | Creates and runs tests | pro |
-| **Review Agent** | Reviews code quality | flash |
-| **Debug Agent** | Diagnoses and fixes bugs | pro |
-| **Docs Agent** | Writes documentation | flash |
+| Agent | Role | Specialization |
+|-------|------|----------------|
+| **Frontend Developer** | React, TypeScript, Tailwind | Components, UI/UX |
+| **Backend Developer** | APIs, Node.js, Express | Endpoints, middleware |
+| **Database Architect** | PostgreSQL, Prisma, Supabase | Schema, migrations |
+| **Security Engineer** | OWASP, Auth, RLS | Vulnerabilities, hardening |
+| **Test Engineer** | Jest, Playwright | Unit tests, E2E |
+| **DevOps Engineer** | Docker, CI/CD, Kubernetes | Deployment, pipelines |
 
 ### Key Benefits
 
+- **Best Quality Always**: All agents use your selected model (no flash/pro switching)
 - **Context Isolation**: Each agent has its own session, preventing context overflow
 - **Trust System**: Agents build reputation through successful task completion
 - **Quality Gates**: Optional TypeScript/ESLint checks before applying changes
@@ -199,17 +202,6 @@ Or via environment:
 ```bash
 export GEMINI_AGENTIC_MODE=false  # Disable agentic mode
 ```
-
-### Provider-Specific Models
-
-Agentic mode automatically selects appropriate models based on your provider:
-
-| Provider | Flash Model | Pro Model |
-|----------|-------------|-----------|
-| Gemini | gemini-2.5-flash | gemini-2.5-pro |
-| Z.AI (GLM) | glm-4-flash | glm-4.7 |
-| Ollama | llama3.2 | llama3.1 |
-| OpenRouter | google/gemini-2.5-flash | anthropic/claude-3.5-sonnet |
 
 ## 🚀 Usage Examples
 
