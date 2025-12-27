@@ -1,10 +1,13 @@
-// Add to the exports in packages/core/src/index.ts:
-// 
-// After the existing exports, add:
-// export {
-//   isOpenAICompatibleConfigured,
-//   getOpenAICompatibleAuthType,
-// } from './core/contentGenerator.js';
-//
-// This patch file documents what needs to be manually added to index.ts
-// The actual index.ts file is auto-generated, so this documents the required change.
+--- a/packages/core/src/index.ts
++++ b/packages/core/src/index.ts
+@@ -124,3 +124,10 @@ export * from './hooks/types.js';
+ // Export stdio utils
+ export * from './utils/stdio.js';
+ export * from './utils/terminal.js';
++
++// Export Agentic Hybrid System
++export * from './hybrid/index.js';
++export * from './trust/index.js';
++export * from './agents/specialized/index.js';
++export * from './agents/session/index.js';
++export * from './safety/index.js';
