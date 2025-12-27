@@ -172,6 +172,46 @@ const providerRemoveCommand: SlashCommand = {
 };
 
 /**
+ * /provider help - Show help for provider commands
+ */
+const providerHelpCommand: SlashCommand = {
+  name: 'help',
+  description: 'Show help for provider commands',
+  kind: CommandKind.BUILT_IN,
+  autoExecute: true,
+  action: (context: CommandContext) => {
+    const lines = [
+      '**Provider Commands:**',
+      '',
+      '`/provider` - Open interactive provider configuration dialog',
+      '`/provider <id>` - Configure a specific provider (e.g., `/provider openai`)',
+      '`/provider list` - List all configured providers',
+      '`/provider status` - Show current active provider status',
+      '`/provider switch <id>` - Switch to a different configured provider',
+      '`/provider remove <id>` - Remove a configured provider',
+      '`/provider help` - Show this help message',
+      '',
+      '**Available Providers:**',
+      '  gemini, openrouter, openai, anthropic, groq, together,',
+      '  mistral, deepseek, zai, ollama, lmstudio, custom',
+      '',
+      '**Examples:**',
+      '  `/provider openai` - Configure OpenAI',
+      '  `/provider switch anthropic` - Switch to Anthropic',
+      '  `/provider list` - See all configured providers',
+    ];
+
+    context.ui.addItem(
+      {
+        type: MessageType.INFO,
+        text: lines.join('\n'),
+      },
+      Date.now(),
+    );
+  },
+};
+
+/**
  * /provider status - Show current provider status
  */
 const providerStatusCommand: SlashCommand = {
@@ -252,6 +292,7 @@ export const providerCommand: SlashCommand = {
     providerSwitchCommand,
     providerRemoveCommand,
     providerStatusCommand,
+    providerHelpCommand,
   ],
   action: (
     context: CommandContext,

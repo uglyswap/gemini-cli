@@ -12,7 +12,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import * as crypto from 'node:crypto';
 import { getProviderById } from './provider-registry.js';
+
+/**
+ * Generate a unique temporary file path
+ */
+function getTempFilePath(basePath: string): string {
+  const dir = path.dirname(basePath);
+  const randomSuffix = crypto.randomBytes(8).toString('hex');
+  return path.join(dir, `.config.tmp.${randomSuffix}`);
+}
 
 /**
  * Provider configuration stored in config file
@@ -69,10 +79,12 @@ export interface GeminiConfig {
 
 /**
  * Default configuration
+ * Note: activeProvider is empty string until a provider is configured
+ * This prevents inconsistent state where activeProvider points to non-existent provider
  */
 const DEFAULT_CONFIG: GeminiConfig = {
-  version: '1.0',
-  activeProvider: 'gemini',
+  version: CURRENT_CONFIG_VERSION,
+  activeProvider: '',
   providers: {},
   modelCache: {},
   preferences: {
@@ -85,6 +97,32 @@ const DEFAULT_CONFIG: GeminiConfig = {
  * Model cache TTL in hours
  */
 const MODEL_CACHE_TTL_HOURS = 24;
+
+/**
+ * Current config version
+ */
+const CURRENT_CONFIG_VERSION = '1.1';
+
+/**
+ * Migrate configuration from older versions
+ */
+function migrateConfig(config: GeminiConfig): GeminiConfig {
+  const version = config.version || '1.0';
+
+  // Migration from 1.0 to 1.1
+  if (version === '1.0') {
+    // Fix: If activeProvider points to a non-existent provider, clear it
+    if (config.activeProvider && !config.providers[config.activeProvider]) {
+      config.activeProvider = '';
+    }
+    config.version = '1.1';
+  }
+
+  // Add future migrations here in sequence
+  // if (config.version === '1.1') { ... config.version = '1.2'; }
+
+  return config;
+}
 
 /**
  * Config Manager class
@@ -211,6 +249,16 @@ export class ConfigManager {
       throw new Error(`Unknown provider: ${providerId}`);
     }
 
+    // Validate non-empty strings for required fields
+    const apiKey = options.apiKey?.trim();
+    const model = options.model?.trim();
+    const baseUrl = options.baseUrl?.trim();
+
+    // Model is required and cannot be empty
+    if (model !== undefined && !model) {
+      throw new Error('Model cannot be empty');
+    }
+
     const existing = this.config.providers[providerId] || {
       id: providerId,
       name: providerDef.name,
@@ -219,12 +267,21 @@ export class ConfigManager {
 
     this.config.providers[providerId] = {
       ...existing,
-      ...(options.apiKey !== undefined && { apiKey: options.apiKey }),
-      ...(options.model !== undefined && { model: options.model }),
-      ...(options.baseUrl !== undefined && { baseUrl: options.baseUrl }),
+      // Only set if non-empty string (empty string treated as undefined/remove)
+      ...(apiKey ? { apiKey } : options.apiKey === '' ? {} : {}),
+      ...(model ? { model } : {}),
+      ...(baseUrl ? { baseUrl } : options.baseUrl === '' ? {} : {}),
       ...(options.headers !== undefined && { headers: options.headers }),
       lastUsed: new Date().toISOString(),
     };
+
+    // Clean up undefined/empty values
+    if (apiKey !== undefined && !apiKey) {
+      delete this.config.providers[providerId].apiKey;
+    }
+    if (baseUrl !== undefined && !baseUrl) {
+      delete this.config.providers[providerId].baseUrl;
+    }
 
     this.saveConfig();
   }
@@ -411,12 +468,27 @@ export class ConfigManager {
       if (fs.existsSync(this.configPath)) {
         const content = fs.readFileSync(this.configPath, 'utf-8');
         const parsed = JSON.parse(content) as GeminiConfig;
-        return {
+        let config: GeminiConfig = {
           ...DEFAULT_CONFIG,
           ...parsed,
           providers: parsed.providers || {},
           modelCache: parsed.modelCache || {},
         };
+
+        // Apply migrations if needed
+        const originalVersion = config.version;
+        config = migrateConfig(config);
+
+        // Save if migration was applied
+        if (config.version !== originalVersion) {
+          // Defer save to avoid constructor side effects
+          setImmediate(() => {
+            this.config = config;
+            this.saveConfig();
+          });
+        }
+
+        return config;
       }
     } catch (error) {
       console.warn(
@@ -428,22 +500,35 @@ export class ConfigManager {
   }
 
   /**
-   * Save configuration to file
+   * Save configuration to file (atomic write via temp file + rename)
    */
   private saveConfig(): void {
+    const tempPath = getTempFilePath(this.configPath);
+
     try {
       // Ensure directory exists
       if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
+        fs.mkdirSync(this.configDir, { recursive: true, mode: 0o700 });
       }
 
-      // Write config with pretty formatting
-      fs.writeFileSync(
-        this.configPath,
-        JSON.stringify(this.config, null, 2),
-        'utf-8',
-      );
+      // Write to temporary file first
+      const configData = JSON.stringify(this.config, null, 2);
+      fs.writeFileSync(tempPath, configData, {
+        encoding: 'utf-8',
+        mode: 0o600,
+      });
+
+      // Atomic rename (prevents corruption from concurrent writes)
+      fs.renameSync(tempPath, this.configPath);
     } catch (error) {
+      // Clean up temp file if it exists
+      try {
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
       console.error('[ConfigManager] Failed to save config:', error);
       throw error;
     }

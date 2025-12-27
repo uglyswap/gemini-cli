@@ -98,6 +98,47 @@ interface OllamaTagsResponse {
 const FETCH_TIMEOUT_MS = 10000;
 
 /**
+ * Retry configuration
+ */
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 5000,
+  backoffMultiplier: 2,
+};
+
+/**
+ * Maximum number of models to return (prevents UI overload)
+ */
+const MAX_MODELS_LIMIT = 100;
+
+/**
+ * Sleep helper for delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if error is retryable (network errors, 5xx, 429)
+ */
+function isRetryableError(error: unknown, response?: Response): boolean {
+  // Network errors are retryable
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    return true;
+  }
+  // Timeout errors are retryable
+  if (error instanceof Error && error.name === 'AbortError') {
+    return true;
+  }
+  // 5xx server errors and 429 rate limit are retryable
+  if (response && (response.status >= 500 || response.status === 429)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Type guard for OpenAI-style response
  */
 function isOpenAIResponse(data: unknown): data is OpenAIModelsResponse {
@@ -212,7 +253,7 @@ export class ModelRegistry {
   }
 
   /**
-   * Fetch models from provider API
+   * Fetch models from provider API with retry logic
    */
   private async fetchFromApi(
     provider: ProviderDefinition,
@@ -228,7 +269,7 @@ export class ModelRegistry {
 
     const url = `${baseUrl}${provider.modelsEndpoint}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      Accept: 'application/json',
     };
 
     // Add authorization if API key provided
@@ -236,36 +277,79 @@ export class ModelRegistry {
       headers['Authorization'] = `Bearer ${options.apiKey}`;
     }
 
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let lastError: Error | null = null;
+    let delayMs = RETRY_CONFIG.initialDelayMs;
 
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-      clearTimeout(timeoutId);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers,
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const error = new Error(
+            `HTTP ${response.status}: ${response.statusText}`,
+          );
+          if (
+            isRetryableError(error, response) &&
+            attempt < RETRY_CONFIG.maxRetries
+          ) {
+            lastError = error;
+            await sleep(delayMs);
+            delayMs = Math.min(
+              delayMs * RETRY_CONFIG.backoffMultiplier,
+              RETRY_CONFIG.maxDelayMs,
+            );
+            continue;
+          }
+          throw error;
+        }
+
+        const data = await response.json();
+        return this.parseModelsResponse(
+          data,
+          provider.modelsParser || 'openai',
+        );
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error && error.name === 'AbortError') {
+          lastError = new Error('Request timeout');
+        } else if (error instanceof Error) {
+          lastError = error;
+        } else {
+          lastError = new Error(String(error));
+        }
+
+        // Check if we should retry
+        if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
+          await sleep(delayMs);
+          delayMs = Math.min(
+            delayMs * RETRY_CONFIG.backoffMultiplier,
+            RETRY_CONFIG.maxDelayMs,
+          );
+          continue;
+        }
+
+        throw lastError;
       }
-
-      const data = await response.json();
-      return this.parseModelsResponse(data, provider.modelsParser || 'openai');
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout');
-      }
-      throw error;
     }
+
+    // Should not reach here, but TypeScript needs this
+    throw lastError || new Error('Unknown error during fetch');
   }
 
   /**
    * Parse models response based on provider type
+   * @throws Error if response format is invalid
    */
   private parseModelsResponse(
     data: unknown,
@@ -274,14 +358,16 @@ export class ModelRegistry {
     switch (parser) {
       case 'openai':
         if (!isOpenAIResponse(data)) {
-          console.warn('[ModelRegistry] Invalid OpenAI response format');
-          return [];
+          throw new Error(
+            'Invalid response format from API. Expected OpenAI-compatible models list.',
+          );
         }
         return this.parseOpenAIResponse(data);
       case 'ollama':
         if (!isOllamaResponse(data)) {
-          console.warn('[ModelRegistry] Invalid Ollama response format');
-          return [];
+          throw new Error(
+            'Invalid response format from Ollama. Expected models list with "models" array.',
+          );
         }
         return this.parseOllamaResponse(data);
       case 'gemini':
@@ -289,10 +375,9 @@ export class ModelRegistry {
         return [];
       default:
         if (!isOpenAIResponse(data)) {
-          console.warn(
-            '[ModelRegistry] Invalid response format for custom parser',
+          throw new Error(
+            'Invalid response format. Expected OpenAI-compatible models list with "data" array.',
           );
-          return [];
         }
         return this.parseOpenAIResponse(data);
     }
@@ -307,7 +392,14 @@ export class ModelRegistry {
     // Type guard already validated data.data is an array
 
     return data.data
-      .filter((model) => model.id && !model.id.includes(':free'))
+      .filter((model) => {
+        // Filter out models without ID
+        if (!model.id) return false;
+        // Only filter OpenRouter's free-tier variants (ending with :free)
+        // This is more specific than includes() to avoid false positives
+        if (model.id.endsWith(':free')) return false;
+        return true;
+      })
       .map((model) => {
         const info: ModelInfo = {
           id: model.id,
@@ -355,7 +447,8 @@ export class ModelRegistry {
         if (aScore !== -1) return -1;
         if (bScore !== -1) return 1;
         return a.id.localeCompare(b.id);
-      });
+      })
+      .slice(0, MAX_MODELS_LIMIT);
   }
 
   /**
@@ -363,10 +456,12 @@ export class ModelRegistry {
    */
   private parseOllamaResponse(data: OllamaTagsResponse): ModelInfo[] {
     // Type guard already validated data.models is an array
-    return data.models.map((model) => ({
-      id: model.name || model.model,
-      name: model.name,
-    }));
+    return data.models
+      .filter((model) => model.name || model.model) // Skip models without any identifier
+      .map((model) => ({
+        id: model.name || model.model,
+        name: model.name || model.model,
+      }));
   }
 
   /**

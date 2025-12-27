@@ -24,7 +24,7 @@ import {
   type ModelInfo,
 } from '@google/gemini-cli-core';
 
-type ConfigStep = 'provider' | 'apiKey' | 'model' | 'success';
+type ConfigStep = 'provider' | 'apiKey' | 'baseUrl' | 'model' | 'success';
 
 interface ProviderConfigDialogProps {
   onClose: () => void;
@@ -38,14 +38,18 @@ export function ProviderConfigDialog({
   const { mainAreaWidth } = useUIState();
   const viewportWidth = mainAreaWidth - 8;
 
+  // Validate initialProviderId before using it
+  const validatedInitialProvider = initialProviderId
+    ? getProviderById(initialProviderId)
+    : undefined;
+
   const [step, setStep] = useState<ConfigStep>(
-    initialProviderId ? 'apiKey' : 'provider',
+    validatedInitialProvider ? 'apiKey' : 'provider',
   );
   const [selectedProvider, setSelectedProvider] =
-    useState<ProviderDefinition | null>(
-      initialProviderId ? getProviderById(initialProviderId) || null : null,
-    );
+    useState<ProviderDefinition | null>(validatedInitialProvider || null);
   const [apiKey, setApiKey] = useState<string>('');
+  const [baseUrl, setBaseUrl] = useState<string>('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +71,7 @@ export function ProviderConfigDialog({
   );
 
   // Text buffer for API key input
-  const buffer = useTextBuffer({
+  const apiKeyBuffer = useTextBuffer({
     initialText: '',
     initialCursorOffset: 0,
     viewport: {
@@ -80,6 +84,20 @@ export function ProviderConfigDialog({
     singleLine: true,
   });
 
+  // Text buffer for base URL input
+  const baseUrlBuffer = useTextBuffer({
+    initialText: '',
+    initialCursorOffset: 0,
+    viewport: {
+      width: viewportWidth,
+      height: 4,
+    },
+    isValidPath: () => false,
+    inputFilter: (text) =>
+      text.replace(/[^a-zA-Z0-9_\-.:+/=?&#]/g, '').replace(/[\r\n]/g, ''),
+    singleLine: true,
+  });
+
   // Handle escape key
   useKeypress(
     (key) => {
@@ -89,8 +107,18 @@ export function ProviderConfigDialog({
         } else if (step === 'apiKey') {
           setStep('provider');
           setError(null);
-        } else if (step === 'model') {
+        } else if (step === 'baseUrl') {
           if (selectedProvider?.requiresApiKey) {
+            setStep('apiKey');
+          } else {
+            setStep('provider');
+          }
+          setError(null);
+        } else if (step === 'model') {
+          // Go back to baseUrl if custom provider, otherwise to apiKey or provider
+          if (selectedProvider?.id === 'custom') {
+            setStep('baseUrl');
+          } else if (selectedProvider?.requiresApiKey) {
             setStep('apiKey');
           } else {
             setStep('provider');
@@ -148,7 +176,7 @@ export function ProviderConfigDialog({
 
   // Fetch models when provider is selected
   const fetchModels = useCallback(
-    async (providerId: string, key?: string) => {
+    async (providerId: string, key?: string, customBaseUrl?: string) => {
       setIsLoading(true);
       setError(null);
 
@@ -158,21 +186,28 @@ export function ProviderConfigDialog({
           throw new Error(`Unknown provider: ${providerId}`);
         }
 
+        const effectiveBaseUrl = customBaseUrl || provider.defaultBaseUrl;
+
         // Check if local provider is running
         if (provider.isLocal) {
-          if (providerId === 'ollama') {
-            const isRunning = await modelRegistry.isOllamaRunning(
-              provider.defaultBaseUrl,
+          // Local providers should always have a base URL configured
+          if (!effectiveBaseUrl) {
+            throw new Error(
+              `No base URL configured for local provider: ${providerId}`,
             );
+          }
+
+          if (providerId === 'ollama') {
+            const isRunning =
+              await modelRegistry.isOllamaRunning(effectiveBaseUrl);
             if (!isRunning) {
               throw new Error(
                 'Ollama is not running. Start it with: ollama serve',
               );
             }
           } else if (providerId === 'lmstudio') {
-            const isRunning = await modelRegistry.isLMStudioRunning(
-              provider.defaultBaseUrl,
-            );
+            const isRunning =
+              await modelRegistry.isLMStudioRunning(effectiveBaseUrl);
             if (!isRunning) {
               throw new Error(
                 'LM Studio is not running. Start it and enable the local server.',
@@ -183,6 +218,7 @@ export function ProviderConfigDialog({
 
         const result = await modelRegistry.fetchModels(providerId, {
           apiKey: key,
+          baseUrl: customBaseUrl,
           forceRefresh: true,
         });
 
@@ -229,7 +265,11 @@ export function ProviderConfigDialog({
       const existingConfig = configManager.getProvider(providerId);
       if (existingConfig?.apiKey) {
         setApiKey(existingConfig.apiKey);
-        buffer.setText(existingConfig.apiKey);
+        apiKeyBuffer.setText(existingConfig.apiKey);
+      }
+      if (existingConfig?.baseUrl) {
+        setBaseUrl(existingConfig.baseUrl);
+        baseUrlBuffer.setText(existingConfig.baseUrl);
       }
 
       if (provider.requiresApiKey) {
@@ -239,7 +279,7 @@ export function ProviderConfigDialog({
         void fetchModels(providerId);
       }
     },
-    [configManager, fetchModels, buffer],
+    [configManager, fetchModels, apiKeyBuffer, baseUrlBuffer],
   );
 
   // Handle API key submission
@@ -254,9 +294,40 @@ export function ProviderConfigDialog({
       }
 
       setApiKey(trimmedKey);
-      void fetchModels(selectedProvider.id, trimmedKey);
+
+      // Custom provider needs baseUrl before fetching models
+      if (selectedProvider.id === 'custom') {
+        setStep('baseUrl');
+      } else {
+        void fetchModels(selectedProvider.id, trimmedKey);
+      }
     },
     [selectedProvider, fetchModels],
+  );
+
+  // Handle base URL submission (for custom provider)
+  const handleBaseUrlSubmit = useCallback(
+    (url: string) => {
+      if (!selectedProvider) return;
+
+      const trimmedUrl = url.trim();
+      if (!trimmedUrl) {
+        setError('Base URL is required for custom provider');
+        return;
+      }
+
+      // Basic URL validation
+      try {
+        new URL(trimmedUrl);
+      } catch {
+        setError('Invalid URL format. Example: https://api.example.com/v1');
+        return;
+      }
+
+      setBaseUrl(trimmedUrl);
+      void fetchModels(selectedProvider.id, apiKey, trimmedUrl);
+    },
+    [selectedProvider, apiKey, fetchModels],
   );
 
   // Handle model selection
@@ -269,6 +340,7 @@ export function ProviderConfigDialog({
         configManager.configureProvider(selectedProvider.id, {
           apiKey: apiKey || undefined,
           model: modelId,
+          baseUrl: baseUrl || undefined,
         });
 
         // Set as active provider
@@ -276,16 +348,16 @@ export function ProviderConfigDialog({
 
         setStep('success');
 
-        // Auto-close after a short delay (with cleanup ref)
+        // Auto-close after a delay to let user read the success message
         autoCloseTimeoutRef.current = setTimeout(() => {
           onClose();
-        }, 1500);
+        }, 3000);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
       }
     },
-    [selectedProvider, apiKey, configManager, onClose],
+    [selectedProvider, apiKey, baseUrl, configManager, onClose],
   );
 
   // Get configured providers for showing status
@@ -397,7 +469,7 @@ export function ProviderConfigDialog({
             flexGrow={1}
           >
             <TextInput
-              buffer={buffer}
+              buffer={apiKeyBuffer}
               onSubmit={handleApiKeySubmit}
               onCancel={() => {
                 setStep('provider');
@@ -406,6 +478,62 @@ export function ProviderConfigDialog({
               placeholder={
                 selectedProvider?.apiKeyPlaceholder || 'Paste your API key here'
               }
+            />
+          </Box>
+        </Box>
+        {error && (
+          <Box marginTop={1}>
+            <Text color={theme.status.error}>{error}</Text>
+          </Box>
+        )}
+        <Box marginTop={1}>
+          <Text color={theme.text.secondary}>
+            (Press Enter to continue, Esc to go back)
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (step === 'baseUrl') {
+    return (
+      <Box
+        borderStyle="round"
+        borderColor={theme.border.focused}
+        flexDirection="column"
+        padding={1}
+        width="100%"
+      >
+        <Text bold color={theme.text.primary}>
+          {selectedProvider?.icon} {selectedProvider?.name} - Enter Base URL
+        </Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color={theme.text.primary}>
+            Enter the base URL for your OpenAI-compatible API endpoint.
+          </Text>
+          <Text color={theme.text.secondary}>
+            Example: https://api.example.com/v1
+          </Text>
+        </Box>
+        <Box marginTop={1} flexDirection="row">
+          <Box
+            borderStyle="round"
+            borderColor={theme.border.default}
+            paddingX={1}
+            flexGrow={1}
+          >
+            <TextInput
+              buffer={baseUrlBuffer}
+              onSubmit={handleBaseUrlSubmit}
+              onCancel={() => {
+                if (selectedProvider?.requiresApiKey) {
+                  setStep('apiKey');
+                } else {
+                  setStep('provider');
+                }
+                setError(null);
+              }}
+              placeholder="https://api.example.com/v1"
             />
           </Box>
         </Box>
