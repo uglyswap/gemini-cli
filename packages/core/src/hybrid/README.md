@@ -1,271 +1,299 @@
-# Hybrid Agentic System
+# Agentic Hybrid System
 
-This module combines the best features of **gemini-cli's** execution engine with **Agentic Dev System's** multi-agent orchestration concepts.
-
-## Features
-
-### 1. Trust Cascade (L0-L4)
-
-Dynamic trust levels that evolve based on agent execution history:
-
-| Level | Name | Description | Privileges |
-|-------|------|-------------|------------|
-| L4 | Autonomous Expert | 50+ successful executions, 95%+ success rate | Skip explanations, auto-approve |
-| L3 | Trusted Agent | 20+ executions, 85%+ success rate | Standard oversight |
-| L2 | Guided Agent | 5+ executions, 70%+ success rate | Full quality checks |
-| L1 | Supervised Agent | New or recovering agent | Enhanced supervision |
-| L0 | Quarantined | Critical failures or security issues | Disabled |
-
-### 2. Multi-Agent System (28 Specialized Agents)
-
-Intelligent routing to domain-specific agents:
-
-- **Frontend** (5): frontend-developer, ui-ux-designer, accessibility-expert, performance-optimizer, animation-specialist
-- **Backend** (5): backend-developer, api-architect, microservices-expert, integration-specialist, graphql-developer
-- **Database** (3): database-architect, query-optimizer, migration-specialist
-- **Security** (3): security-engineer, penetration-tester, compliance-auditor
-- **Testing** (3): test-engineer, e2e-tester, code-reviewer
-- **DevOps** (3): devops-engineer, infrastructure-architect, ci-cd-specialist
-- **AI/ML** (3): ai-engineer, ml-ops-specialist, prompt-engineer
-- **Documentation** (3): technical-writer, api-documenter, architecture-documenter
-
-### 3. Safety Net
-
-**Snapshots:**
-- Automatic file snapshots before risky operations
-- One-click rollback to previous state
-- Diff comparison between snapshot and current state
-
-**Quality Gates:**
-- Pre-execution validation (secrets detection, etc.)
-- Post-execution checks (TypeScript, ESLint, tests, etc.)
-- Configurable strictness levels
-
-### 4. Enhanced Orchestrator
-
-6-phase execution workflow:
-
-1. **INIT**: Task analysis, agent selection, trust check
-2. **EXPLAIN**: Present plan for user approval (low-trust levels)
-3. **SNAPSHOT**: Create safety snapshot
-4. **EXECUTE**: Run selected agents sequentially
-5. **VALIDATE**: Run post-execution quality gates
-6. **REPORT**: Generate execution summary
+This module adds multi-agent orchestration capabilities to gemini-cli, combining the CLI's robust TypeScript runtime with advanced agent coordination concepts.
 
 ## Quick Start
 
-```typescript
-import { createOrchestrator } from './hybrid';
+### Enable Agentic Mode
 
-// Create with defaults
-const orchestrator = createOrchestrator();
+**Option 1: GEMINI.md Configuration**
 
-// Or with custom options
-const orchestrator = createOrchestrator(process.cwd(), {
-  enableTrustCascade: true,
-  enableMultiAgent: true,
-  enableSnapshots: true,
-  enableQualityGates: true,
-  verbose: true,
-});
+Add to your `GEMINI.md`:
 
-// Execute a task
-const result = await orchestrator.executeTask({
-  description: 'Add user authentication with JWT',
-  affectedFiles: ['src/auth/**/*.ts', 'src/middleware/*.ts'],
-  requireApproval: true,
-});
+```markdown
+## Agentic Mode Configuration
 
-console.log(`Success: ${result.success}`);
-console.log(`Quality: ${result.averageQuality}%`);
-console.log(`Agents: ${result.agentResults.map(a => a.agentName).join(' → ')}`);
+enableAgentic: true
+agenticSnapshots: true
+agenticQualityGates:
+  - typescript
+  - eslint
+  - security-scan
+agenticMaxSessions: 5
 ```
 
-## Configuration
+**Option 2: Environment Variable**
 
-```typescript
-import { EnhancedAgentOrchestrator, TrustLevel } from './hybrid';
-
-const orchestrator = new EnhancedAgentOrchestrator({
-  // Project settings
-  projectRoot: process.cwd(),
-  
-  // Feature flags
-  enableTrustCascade: true,
-  enableMultiAgent: true,
-  enableSnapshots: true,
-  enableQualityGates: true,
-  
-  // Trust settings
-  snapshotTrustThreshold: TrustLevel.L2_GUIDED,
-  
-  // Agent settings
-  maxAgentsPerTask: 4,
-  
-  // Quality settings
-  strictQualityGates: false,
-  autoRollbackOnFailure: true,
-  
-  // Logging
-  verbose: false,
-  
-  // Model configuration
-  modelConfig: {
-    fastModel: 'gemini-1.5-flash',
-    balancedModel: 'gemini-1.5-pro',
-    powerfulModel: 'gemini-1.5-pro',
-  },
-});
+```bash
+export GEMINI_AGENTIC_MODE=true
+gemini
 ```
 
-## Events & Callbacks
+**Option 3: CLI Command**
 
-### Phase Callbacks
-
-```typescript
-orchestrator.onPhaseChange((phase, data) => {
-  console.log(`Phase: ${phase}`, data);
-});
+```bash
+gemini
+> /agentic enable
 ```
 
-### Approval Callback
+### Using Agentic Mode
 
-```typescript
-orchestrator.setApprovalCallback(async (task, agents, context) => {
-  console.log('Agents to execute:', agents.map(a => a.name));
-  const approved = await askUser('Approve? (y/n)');
-  return approved === 'y';
-});
+```bash
+# Execute a task with multi-agent orchestration
+> /agentic Add user authentication with JWT tokens and refresh rotation
+
+# Check status
+> /agentic status
+
+# List available agents
+> /agentic agents
+
+# View trust levels
+> /agentic trust
 ```
 
-## Direct Module Access
+## Architecture
 
-### Trust Engine
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    HybridModeManager                         │
+│  (CLI Integration Point)                                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │           EnhancedAgentOrchestrator                  │    │
+│  │  (6-Phase Workflow)                                  │    │
+│  ├─────────────────────────────────────────────────────┤    │
+│  │                                                      │    │
+│  │  Phase 1: INIT ──────► Phase 2: EXPLAIN             │    │
+│  │      │                      │                        │    │
+│  │      ▼                      ▼                        │    │
+│  │  AgentSelector          ExecutionPlan                │    │
+│  │                              │                        │    │
+│  │                              ▼                        │    │
+│  │  Phase 3: SNAPSHOT ◄────────┘                        │    │
+│  │      │                                               │    │
+│  │      ▼                                               │    │
+│  │  SnapshotManager                                     │    │
+│  │      │                                               │    │
+│  │      ▼                                               │    │
+│  │  Phase 4: EXECUTE ──────► AgentSessionManager        │    │
+│  │      │                         │                     │    │
+│  │      │                         ▼                     │    │
+│  │      │                    AgentSession (isolated)    │    │
+│  │      │                         │                     │    │
+│  │      ▼                         ▼                     │    │
+│  │  Phase 5: VALIDATE ◄──── TrustCascadeEngine          │    │
+│  │      │                                               │    │
+│  │      ▼                                               │    │
+│  │  GateRunner (Quality Gates)                          │    │
+│  │      │                                               │    │
+│  │      ▼                                               │    │
+│  │  Phase 6: REPORT                                     │    │
+│  │                                                      │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Components
+
+### 1. Trust Cascade Engine
+
+Manages dynamic trust levels for agents based on execution history.
 
 ```typescript
 import { TrustCascadeEngine, TrustLevel } from './hybrid';
 
-const trustEngine = new TrustCascadeEngine(projectRoot);
+const trustEngine = new TrustCascadeEngine(workingDirectory);
 
-// Get current level
-const level = trustEngine.calculateTrustLevel('frontend-developer');
-console.log(TrustLevel[level]); // "L3_TRUSTED"
+// Get trust level for an agent
+const level = trustEngine.calculateTrustLevel('react-specialist');
+// Returns: TrustLevel.L1_SUPERVISED (for new agents)
 
-// Get privileges
-const privileges = trustEngine.getPrivileges('frontend-developer');
-console.log(privileges.autoApproveChanges); // "low_risk_only"
+// Get privileges based on trust
+const privileges = trustEngine.getPrivileges('react-specialist');
+// Returns: { allowedTools: ['read', 'edit'], requiresApproval: true, ... }
 
-// Record execution
-trustEngine.recordExecution('frontend-developer', {
-  success: true,
-  qualityScore: 92,
-  durationMs: 5000,
-});
+// Record successful execution (trust increases over time)
+trustEngine.recordExecution('react-specialist', true);
 ```
 
-### Agent Selector
+**Trust Levels:**
+- `L0_QUARANTINE`: Disabled agents (repeated failures)
+- `L1_SUPERVISED`: New or recovering agents (strict oversight)
+- `L2_GUIDED`: Standard supervision (default)
+- `L3_TRUSTED`: Reduced oversight (proven reliability)
+- `L4_AUTONOMOUS`: Expert agents (minimal intervention)
+
+### 2. Agent Registry
+
+28 specialized agents across 8 domains:
+
+| Domain | Agents |
+|--------|--------|
+| Frontend | react-specialist, css-architect, accessibility-expert, performance-optimizer |
+| Backend | api-designer, database-architect, auth-security, integration-specialist |
+| Database | schema-designer, query-optimizer, migration-manager, data-modeler |
+| Security | security-auditor, penetration-tester, compliance-checker, secret-scanner |
+| Testing | unit-test-writer, e2e-test-architect, test-coverage-analyzer |
+| DevOps | ci-cd-engineer, docker-specialist, infrastructure-architect |
+| AI/ML | ml-engineer, prompt-engineer, vector-db-specialist |
+| Documentation | technical-writer, api-documenter, architecture-diagrammer |
 
 ```typescript
-import { AgentSelector, AGENT_REGISTRY } from './hybrid';
+import { AgentSelector, getAgentById } from './hybrid';
 
 const selector = new AgentSelector();
 
 // Select agents for a task
-const result = selector.selectAgents('Add React component with authentication');
-console.log(result.agents.map(a => a.name));
-// ["Security Engineer", "Frontend Developer"]
+const selected = selector.selectAgents('Add JWT authentication with refresh tokens');
+// Returns: [auth-security, api-designer, unit-test-writer, ...]
 
-console.log(result.complexity); // "moderate"
-console.log(result.reasoning);
+// Get execution order
+const ordered = selector.getExecutionOrder(selected);
 ```
 
-### Snapshot Manager
+### 3. Agent Sessions (Context Isolation)
 
+Each agent operates in its own isolated context:
+
+```typescript
+import { AgentSessionManager } from './hybrid';
+
+const sessionManager = new AgentSessionManager(config, contentGenerator, {
+  workingDirectory: '/project',
+  maxConcurrentSessions: 5,
+  reuseAgentSessions: true,
+});
+
+// Execute with isolated context
+const result = await sessionManager.executeAgentTask(
+  agent,
+  'Implement the authentication middleware',
+);
+
+// Each agent has:
+// - Own conversation history
+// - Own token budget
+// - Specialized system prompt
+// - Domain-specific tool access
+```
+
+### 4. Safety Net
+
+**Snapshots:**
 ```typescript
 import { SnapshotManager } from './hybrid';
 
-const snapshots = new SnapshotManager(projectRoot);
+const snapshots = new SnapshotManager({
+  workingDirectory: '/project',
+  maxSnapshots: 10,
+  excludePatterns: ['node_modules', '.git'],
+});
 
-// Create snapshot
-const snapshot = await snapshots.createSnapshot(
-  ['src/auth.ts', 'src/config.ts'],
-  'Before auth changes',
-  { agentId: 'security-engineer', taskDescription: 'Add JWT', trustLevel: 2 }
-);
+// Create before risky operations
+const snapshotId = await snapshots.createSnapshot('Before auth implementation');
 
-// Compare with current state
-const diff = snapshots.diffSnapshot(snapshot.id);
-console.log(`Modified: ${diff.summary.modified}, Deleted: ${diff.summary.deleted}`);
-
-// Restore if needed
-await snapshots.restoreSnapshot(snapshot.id);
+// Restore if something goes wrong
+await snapshots.restoreSnapshot(snapshotId);
 ```
 
-### Quality Gates
-
+**Quality Gates:**
 ```typescript
 import { GateRunner, BUILT_IN_GATES } from './hybrid';
 
-const gates = new GateRunner({ strictMode: true });
+const gates = BUILT_IN_GATES.filter(g => 
+  ['typescript', 'eslint', 'security-scan'].includes(g.name)
+);
 
-// Run pre-execution gates
-const preResult = await gates.runPreGates({
-  projectRoot,
-  modifiedFiles: ['src/api.ts'],
-  agentId: 'backend-developer',
-  taskDescription: 'Add endpoint',
-  trustLevel: 2,
-  options: {},
+const runner = new GateRunner(gates, workingDirectory);
+const results = await runner.runPostGates();
+// Returns: [{ name: 'typescript', passed: true }, ...]
+```
+
+### 5. Enhanced Orchestrator
+
+```typescript
+import { createOrchestrator } from './hybrid';
+
+const orchestrator = createOrchestrator(cliConfig, contentGenerator, {
+  workingDirectory: '/project',
+  enableSnapshots: true,
+  qualityGates: ['typescript', 'eslint', 'security-scan'],
 });
 
-if (!preResult.passed) {
-  console.log('Blocking issues:', preResult.blockingIssues);
-}
+const report = await orchestrator.executeTask(
+  'Add user authentication with JWT tokens',
+  {
+    onPhaseChange: (phase) => console.log(`Phase: ${phase}`),
+    onApprovalRequired: async (plan) => {
+      // Review plan and approve/reject
+      console.log('Plan:', plan);
+      return true; // or prompt user
+    },
+  }
+);
+
+console.log('Success:', report.success);
+console.log('Agents used:', report.agentExecutions.map(e => e.agentName));
 ```
 
-## File Structure
+## Configuration Reference
 
-```
-packages/core/src/
-├── hybrid/
-│   ├── index.ts          # Main exports
-│   └── README.md         # This file
-│
-├── trust/
-│   ├── types.ts          # Trust type definitions
-│   ├── trust-engine.ts   # Trust cascade engine
-│   └── index.ts
-│
-├── agents/
-│   └── specialized/
-│       ├── types.ts          # Agent type definitions
-│       ├── agent-registry.ts # 28 specialized agents
-│       ├── agent-selector.ts # Intelligent agent routing
-│       └── index.ts
-│
-├── safety/
-│   ├── snapshot/
-│   │   ├── types.ts           # Snapshot types
-│   │   ├── snapshot-manager.ts # Snapshot operations
-│   │   └── index.ts
-│   │
-│   └── quality-gates/
-│       ├── types.ts         # Gate types
-│       ├── gate-runner.ts   # Gate execution
-│       ├── built-in-gates.ts # Default gates
-│       └── index.ts
-│
-└── orchestrator/
-    ├── types.ts                  # Orchestrator types
-    ├── enhanced-orchestrator.ts  # Main orchestrator
-    └── index.ts
+### GEMINI.md Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enableAgentic` | boolean | false | Enable agentic mode |
+| `agenticSnapshots` | boolean | true | Create safety snapshots |
+| `agenticQualityGates` | string[] | ['typescript', 'eslint'] | Gates to run |
+| `agenticMaxSessions` | number | 5 | Max concurrent sessions |
+| `agenticApprovalLevel` | string | 'L2_GUIDED' | Trust level requiring approval |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_AGENTIC_MODE` | Set to 'true' to enable |
+
+## Programmatic Usage
+
+```typescript
+import { createHybridModeManager } from '@anthropic/gemini-cli-core';
+
+const manager = createHybridModeManager(cliConfig, contentGenerator, {
+  enableAgentic: true,
+  agenticSnapshots: true,
+});
+
+// Execute task
+const report = await manager.executeTask(
+  'Refactor the payment service',
+  workingDirectory,
+);
 ```
 
-## Inspired By
+## Best Practices
 
-- **gemini-cli**: TypeScript execution engine, tool registry, MCP protocol
-- **Agentic Dev System v3.1 "Fusion"**: Trust cascade, specialized agents, safety protocols
+1. **Start with specific tasks**: "Add JWT auth" works better than "improve security"
+2. **Review execution plans**: Always check the plan before complex operations
+3. **Use snapshots**: Keep them enabled for any file-modifying operations
+4. **Monitor trust levels**: Agents earn trust over time through successful executions
+5. **Configure quality gates**: Enable relevant gates for your project type
 
-## License
+## Troubleshooting
 
-Apache-2.0
+**Agents not being selected:**
+- Check task keywords match agent triggers
+- Use `/agentic agents` to see available agents
+
+**Trust too low:**
+- Agents start at L1_SUPERVISED
+- Successful executions increase trust
+- Check trust with `/agentic trust`
+
+**Validation failures:**
+- Quality gates run after execution
+- Fix issues and re-run, or disable failing gates
+- Snapshots auto-restore on critical failures

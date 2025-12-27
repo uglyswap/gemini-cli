@@ -1,150 +1,122 @@
 /**
- * Hybrid Agentic System
- * 
- * Combines the best of gemini-cli's execution engine with
- * Agentic Dev System's multi-agent orchestration concepts.
- * 
- * Features:
- * - Trust Cascade (L0-L4): Dynamic trust levels based on agent history
- * - Multi-Agent (28 specialized): Domain-specific agents with intelligent routing
- * - Safety Net: Automatic snapshots and quality gates
- * - Enhanced Orchestrator: Coordinates all components
- * 
- * @example
- * ```typescript
- * import { EnhancedAgentOrchestrator } from './hybrid';
- * 
- * const orchestrator = new EnhancedAgentOrchestrator({
- *   projectRoot: process.cwd(),
- *   enableTrustCascade: true,
- *   enableMultiAgent: true,
- *   enableSnapshots: true,
- * });
- * 
- * const result = await orchestrator.executeTask({
- *   description: 'Add authentication to the API',
- *   affectedFiles: ['src/auth/*.ts'],
- * });
- * ```
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-// Trust Cascade System
-export {
-  TrustLevel,
+/**
+ * Agentic Hybrid System - Main Entry Point
+ * 
+ * This module combines gemini-cli's TypeScript runtime with advanced
+ * agent orchestration concepts for enhanced multi-agent execution.
+ * 
+ * Key Features:
+ * - Trust Cascade Engine (L0-L4 trust levels)
+ * - 28 Specialized Agents across 8 domains
+ * - Safety Net (Snapshots + Quality Gates)
+ * - Enhanced Agent Orchestration (6-phase workflow)
+ * - Isolated Agent Sessions (context separation)
+ */
+
+// Trust System
+export { TrustCascadeEngine } from '../trust/trust-engine.js';
+export { TrustLevel } from '../trust/types.js';
+export type {
   TrustMetrics,
   TrustThreshold,
   TrustPrivileges,
   TrustLevelConfig,
-  TrustStore,
-  TrustEngineOptions,
-  ExecutionRecord,
-  ExecutionRecordResult,
-  SupervisionMode,
 } from '../trust/types.js';
 
-export {
-  TrustCascadeEngine,
-  DEFAULT_LEVEL_CONFIGS,
-} from '../trust/trust-engine.js';
-
-// Specialized Agents
-export {
-  AgentDomain,
-  ModelTier,
-  TaskComplexity,
-  QualityCheck,
-  ToolId,
-  AgentSpecialization,
-  AgentSelectionResult,
-  AgentContext,
-} from '../agents/specialized/types.js';
-
+// Agent Registry & Selection
 export {
   AGENT_REGISTRY,
   getAgentById,
   getAgentsByDomain,
   getAllAgentIds,
 } from '../agents/specialized/agent-registry.js';
+export { AgentSelector } from '../agents/specialized/agent-selector.js';
+export type {
+  SpecializedAgent,
+  AgentDomain,
+  ModelTier,
+} from '../agents/specialized/types.js';
 
-export {
-  AgentSelector,
-  AgentSelectorConfig,
-} from '../agents/specialized/agent-selector.js';
+// Agent Sessions
+export { AgentSession } from '../agents/session/agent-session.js';
+export { AgentSessionManager } from '../agents/session/agent-session-manager.js';
+export type {
+  AgentSessionConfig,
+  AgentTaskResult,
+  AgentSessionState,
+  AgentToolCall,
+  AgentSessionEvent,
+  AgentSessionEventCallback,
+  ModelConfig,
+  MODEL_TIER_CONFIGS,
+} from '../agents/session/types.js';
 
-// Safety Net - Snapshots
-export {
+// Safety Net
+export { SnapshotManager } from '../safety/snapshot/snapshot-manager.js';
+export { GateRunner } from '../safety/quality-gates/gate-runner.js';
+export { BUILT_IN_GATES } from '../safety/quality-gates/built-in-gates.js';
+export type {
   Snapshot,
   SnapshotFile,
-  SnapshotMetadata,
+  SnapshotManagerConfig,
   SnapshotDiff,
-  FileDiff,
-  FileChangeStatus,
-  RestoreOptions,
-  RestoreResult,
-  SnapshotManagerOptions,
 } from '../safety/snapshot/types.js';
-
-export {
-  SnapshotManager,
-} from '../safety/snapshot/snapshot-manager.js';
-
-// Safety Net - Quality Gates
-export {
-  GateSeverity,
-  GateTiming,
-  GateCheckResult,
-  GateIssue,
-  GateExecutionResult,
+export type {
   QualityGate,
-  GateContext,
-  GateRunnerOptions,
+  GateResult,
+  GateRunnerConfig,
 } from '../safety/quality-gates/types.js';
 
-export {
-  GateRunner,
-} from '../safety/quality-gates/gate-runner.js';
-
-export {
-  BUILT_IN_GATES,
-} from '../safety/quality-gates/built-in-gates.js';
-
-// Enhanced Orchestrator
-export {
-  ExecutionPhase,
-  OrchestratorTask,
-  AgentExecutionResult,
-  TaskExecutionResult,
+// Orchestrator
+export { EnhancedAgentOrchestrator } from '../orchestrator/enhanced-orchestrator.js';
+export type {
   OrchestratorConfig,
-  DEFAULT_ORCHESTRATOR_CONFIG,
+  ExecutionPlan,
+  ExecutionStep,
+  ExecutionReport,
+  AgentExecution,
+  ExecutionPhase,
   PhaseCallback,
   ApprovalCallback,
 } from '../orchestrator/types.js';
 
+// Hybrid Mode Manager (CLI Integration)
 export {
-  EnhancedAgentOrchestrator,
-} from '../orchestrator/enhanced-orchestrator.js';
+  HybridModeManager,
+  parseHybridConfig,
+  createHybridModeManager,
+  DEFAULT_HYBRID_CONFIG,
+} from './hybrid-mode-manager.js';
+export type { HybridModeConfig } from './hybrid-mode-manager.js';
+
+// Agentic Command
+export { AgenticCommand } from './agentic-command.js';
+export type { AgenticCommandResult } from './agentic-command.js';
 
 /**
- * Quick start function to create a configured orchestrator
+ * Quick setup helper for creating an orchestrator with defaults
  */
 export function createOrchestrator(
-  projectRoot: string = process.cwd(),
+  cliConfig: any,
+  contentGenerator: any,
   options: {
-    enableTrustCascade?: boolean;
-    enableMultiAgent?: boolean;
+    workingDirectory: string;
     enableSnapshots?: boolean;
-    enableQualityGates?: boolean;
-    verbose?: boolean;
-  } = {}
+    qualityGates?: string[];
+    requireApprovalAbove?: any;
+  },
 ) {
   const { EnhancedAgentOrchestrator } = require('../orchestrator/enhanced-orchestrator.js');
   
-  return new EnhancedAgentOrchestrator({
-    projectRoot,
-    enableTrustCascade: options.enableTrustCascade ?? true,
-    enableMultiAgent: options.enableMultiAgent ?? true,
+  return new EnhancedAgentOrchestrator(cliConfig, contentGenerator, {
+    workingDirectory: options.workingDirectory,
     enableSnapshots: options.enableSnapshots ?? true,
-    enableQualityGates: options.enableQualityGates ?? true,
-    verbose: options.verbose ?? false,
+    qualityGates: options.qualityGates ?? ['typescript', 'eslint'],
+    requireApprovalAbove: options.requireApprovalAbove,
   });
 }
