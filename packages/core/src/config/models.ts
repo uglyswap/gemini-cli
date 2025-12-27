@@ -10,12 +10,36 @@ export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-pro';
 export const DEFAULT_GEMINI_FLASH_MODEL = 'gemini-2.5-flash';
 export const DEFAULT_GEMINI_FLASH_LITE_MODEL = 'gemini-2.5-flash-lite';
 
+// OpenAI-compatible provider models
+export const ZAI_GLM_MODEL = 'glm-4.7';
+export const ZAI_GLM_FLASH_MODEL = 'glm-4-flash';
+
 export const VALID_GEMINI_MODELS = new Set([
   PREVIEW_GEMINI_MODEL,
   PREVIEW_GEMINI_FLASH_MODEL,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_GEMINI_FLASH_MODEL,
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
+]);
+
+// Models supported via OpenAI-compatible providers
+export const OPENAI_COMPATIBLE_MODELS = new Set([
+  ZAI_GLM_MODEL,
+  ZAI_GLM_FLASH_MODEL,
+  // OpenRouter models
+  'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'anthropic/claude-3.5-sonnet',
+  'openai/gpt-4o',
+  // Ollama models
+  'llama3.2',
+  'llama3.1',
+  'codellama',
+  'mistral',
+  'mixtral',
+  'phi3',
+  'qwen2.5',
+  'deepseek-coder',
 ]);
 
 export const PREVIEW_GEMINI_MODEL_AUTO = 'auto-gemini-3';
@@ -26,6 +50,10 @@ export const GEMINI_MODEL_ALIAS_AUTO = 'auto';
 export const GEMINI_MODEL_ALIAS_PRO = 'pro';
 export const GEMINI_MODEL_ALIAS_FLASH = 'flash';
 export const GEMINI_MODEL_ALIAS_FLASH_LITE = 'flash-lite';
+
+// OpenAI-compatible model aliases
+export const ZAI_MODEL_ALIAS = 'glm';
+export const ZAI_MODEL_ALIAS_FLASH = 'glm-flash';
 
 export const DEFAULT_GEMINI_EMBEDDING_MODEL = 'gemini-embedding-001';
 
@@ -63,6 +91,13 @@ export function resolveModel(
     }
     case GEMINI_MODEL_ALIAS_FLASH_LITE: {
       return DEFAULT_GEMINI_FLASH_LITE_MODEL;
+    }
+    // Z.AI / GLM model aliases
+    case ZAI_MODEL_ALIAS: {
+      return ZAI_GLM_MODEL;
+    }
+    case ZAI_MODEL_ALIAS_FLASH: {
+      return ZAI_GLM_FLASH_MODEL;
     }
     default: {
       return requestedModel;
@@ -119,6 +154,12 @@ export function getDisplayString(
           ? PREVIEW_GEMINI_FLASH_MODEL
           : DEFAULT_GEMINI_FLASH_MODEL
       })`;
+    case ZAI_GLM_MODEL:
+    case ZAI_MODEL_ALIAS:
+      return 'Z.AI (GLM-4.7)';
+    case ZAI_GLM_FLASH_MODEL:
+    case ZAI_MODEL_ALIAS_FLASH:
+      return 'Z.AI (GLM-4-Flash)';
     default:
       return `Manual (${model})`;
   }
@@ -146,6 +187,25 @@ export function isPreviewModel(model: string): boolean {
  */
 export function isGemini2Model(model: string): boolean {
   return /^gemini-2(\.|$)/.test(model);
+}
+
+/**
+ * Checks if the model is an OpenAI-compatible provider model.
+ *
+ * @param model The model name to check.
+ * @returns True if the model is from an OpenAI-compatible provider.
+ */
+export function isOpenAICompatibleModel(model: string): boolean {
+  return (
+    OPENAI_COMPATIBLE_MODELS.has(model) ||
+    model.startsWith('glm-') ||
+    model.includes('/') || // OpenRouter format: provider/model
+    model.startsWith('llama') ||
+    model.startsWith('mistral') ||
+    model.startsWith('phi') ||
+    model.startsWith('qwen') ||
+    model.startsWith('deepseek')
+  );
 }
 
 /**

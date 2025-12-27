@@ -10,6 +10,8 @@ import {
   debugLogger,
   OutputFormat,
   ExitCodes,
+  isOpenAICompatibleConfigured,
+  getOpenAICompatibleAuthType,
 } from '@google/gemini-cli-core';
 import { USER_SETTINGS_PATH } from './config/settings.js';
 import { validateAuthMethod } from './config/auth.js';
@@ -18,6 +20,12 @@ import { handleError } from './utils/errors.js';
 import { runExitCleanup } from './utils/cleanup.js';
 
 function getAuthTypeFromEnv(): AuthType | undefined {
+  // OpenAI-compatible providers take priority (Z.AI, OpenRouter, Ollama, etc.)
+  const openAICompatibleAuth = getOpenAICompatibleAuthType();
+  if (openAICompatibleAuth) {
+    return openAICompatibleAuth;
+  }
+
   if (process.env['GOOGLE_GENAI_USE_GCA'] === 'true') {
     return AuthType.LOGIN_WITH_GOOGLE;
   }
@@ -39,6 +47,12 @@ export async function validateNonInteractiveAuth(
   try {
     const effectiveAuthType = configuredAuthType || getAuthTypeFromEnv();
 
+    // OpenAI-compatible providers bypass enforcement and validation
+    if (effectiveAuthType === AuthType.USE_OPENAI_COMPATIBLE) {
+      await nonInteractiveConfig.refreshAuth(effectiveAuthType);
+      return nonInteractiveConfig;
+    }
+
     const enforcedType = settings.merged.security?.auth?.enforcedType;
     if (enforcedType && effectiveAuthType !== enforcedType) {
       const message = effectiveAuthType
@@ -48,7 +62,13 @@ export async function validateNonInteractiveAuth(
     }
 
     if (!effectiveAuthType) {
-      const message = `Please set an Auth method in your ${USER_SETTINGS_PATH} or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA`;
+      // Check if OpenAI-compatible is configured but missing
+      if (isOpenAICompatibleConfigured()) {
+        throw new Error(
+          'OpenAI-compatible provider URL is set but no API key found. Please set OPENAI_COMPATIBLE_API_KEY environment variable.',
+        );
+      }
+      const message = `Please set an Auth method in your ${USER_SETTINGS_PATH} or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA, or OPENAI_COMPATIBLE_BASE_URL with OPENAI_COMPATIBLE_API_KEY for external providers`;
       throw new Error(message);
     }
 
