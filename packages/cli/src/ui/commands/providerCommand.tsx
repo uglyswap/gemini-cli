@@ -113,9 +113,11 @@ const providerSwitchCommand: SlashCommand = {
       );
     }
   },
-  completion: (_context: CommandContext, _partialArg: string) => {
+  completion: (_context: CommandContext, partialArg: string) => {
     const configManager = getConfigManager();
-    return configManager.getConfiguredProviderIds();
+    return configManager
+      .getConfiguredProviderIds()
+      .filter((id) => id.toLowerCase().startsWith(partialArg.toLowerCase()));
   },
 };
 
@@ -161,9 +163,11 @@ const providerRemoveCommand: SlashCommand = {
       );
     }
   },
-  completion: (_context: CommandContext, _partialArg: string) => {
+  completion: (_context: CommandContext, partialArg: string) => {
     const configManager = getConfigManager();
-    return configManager.getConfiguredProviderIds();
+    return configManager
+      .getConfiguredProviderIds()
+      .filter((id) => id.toLowerCase().startsWith(partialArg.toLowerCase()));
   },
 };
 

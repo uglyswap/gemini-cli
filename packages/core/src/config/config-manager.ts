@@ -236,6 +236,14 @@ export class ConfigManager {
     if (this.config.activeProvider === providerId) {
       throw new Error('Cannot remove the active provider');
     }
+    if (!this.config.providers[providerId]) {
+      throw new Error(`Provider "${providerId}" is not configured`);
+    }
+    // Prevent removing if it would leave no providers
+    const providerCount = Object.keys(this.config.providers).length;
+    if (providerCount <= 1) {
+      throw new Error('Cannot remove the last configured provider');
+    }
     delete this.config.providers[providerId];
     delete this.config.modelCache[providerId];
     this.saveConfig();

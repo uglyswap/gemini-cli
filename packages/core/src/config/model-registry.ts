@@ -98,6 +98,30 @@ interface OllamaTagsResponse {
 const FETCH_TIMEOUT_MS = 10000;
 
 /**
+ * Type guard for OpenAI-style response
+ */
+function isOpenAIResponse(data: unknown): data is OpenAIModelsResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'data' in data &&
+    Array.isArray((data as OpenAIModelsResponse).data)
+  );
+}
+
+/**
+ * Type guard for Ollama response
+ */
+function isOllamaResponse(data: unknown): data is OllamaTagsResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'models' in data &&
+    Array.isArray((data as OllamaTagsResponse).models)
+  );
+}
+
+/**
  * Model Registry class
  */
 export class ModelRegistry {
@@ -249,16 +273,28 @@ export class ModelRegistry {
   ): ModelInfo[] {
     switch (parser) {
       case 'openai':
-        return this.parseOpenAIResponse(
-          data as OpenAIModelsResponse | OpenRouterModelsResponse,
-        );
+        if (!isOpenAIResponse(data)) {
+          console.warn('[ModelRegistry] Invalid OpenAI response format');
+          return [];
+        }
+        return this.parseOpenAIResponse(data);
       case 'ollama':
-        return this.parseOllamaResponse(data as OllamaTagsResponse);
+        if (!isOllamaResponse(data)) {
+          console.warn('[ModelRegistry] Invalid Ollama response format');
+          return [];
+        }
+        return this.parseOllamaResponse(data);
       case 'gemini':
         // Gemini uses hardcoded models
         return [];
       default:
-        return this.parseOpenAIResponse(data as OpenAIModelsResponse);
+        if (!isOpenAIResponse(data)) {
+          console.warn(
+            '[ModelRegistry] Invalid response format for custom parser',
+          );
+          return [];
+        }
+        return this.parseOpenAIResponse(data);
     }
   }
 
@@ -268,9 +304,7 @@ export class ModelRegistry {
   private parseOpenAIResponse(
     data: OpenAIModelsResponse | OpenRouterModelsResponse,
   ): ModelInfo[] {
-    if (!data.data || !Array.isArray(data.data)) {
-      return [];
-    }
+    // Type guard already validated data.data is an array
 
     return data.data
       .filter((model) => model.id && !model.id.includes(':free'))
@@ -328,10 +362,7 @@ export class ModelRegistry {
    * Parse Ollama response
    */
   private parseOllamaResponse(data: OllamaTagsResponse): ModelInfo[] {
-    if (!data.models || !Array.isArray(data.models)) {
-      return [];
-    }
-
+    // Type guard already validated data.models is an array
     return data.models.map((model) => ({
       id: model.name || model.model,
       name: model.name,
@@ -437,4 +468,11 @@ export function getModelRegistry(): ModelRegistry {
     modelRegistryInstance = new ModelRegistry();
   }
   return modelRegistryInstance;
+}
+
+/**
+ * Reset singleton instance (for testing)
+ */
+export function resetModelRegistry(): void {
+  modelRegistryInstance = null;
 }

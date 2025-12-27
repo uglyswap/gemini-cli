@@ -209,12 +209,13 @@ export const PROVIDER_REGISTRY: ProviderDefinition[] = [
   {
     id: 'custom',
     name: 'Custom OpenAI-Compatible',
-    description: 'Any OpenAI-compatible API endpoint',
+    description: 'Any OpenAI-compatible API endpoint (requires base URL)',
     requiresApiKey: true,
     apiKeyPlaceholder: 'your-api-key',
-    modelsEndpoint: '/models',
+    // No default baseUrl or modelsEndpoint - user must configure via baseUrl option
     modelsParser: 'openai',
     defaultModel: 'default',
+    hardcodedModels: ['default'],
     isLocal: false,
     icon: '🔧',
   },

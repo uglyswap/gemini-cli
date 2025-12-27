@@ -5,7 +5,7 @@
  */
 
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { useKeypress } from '../hooks/useKeypress.js';
@@ -53,6 +53,19 @@ export function ProviderConfigDialog({
   const configManager = getConfigManager();
   const modelRegistry = getModelRegistry();
 
+  // Ref for auto-close timeout cleanup
+  const autoCloseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(
+    () => () => {
+      if (autoCloseTimeoutRef.current) {
+        clearTimeout(autoCloseTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
   // Text buffer for API key input
   const buffer = useTextBuffer({
     initialText: '',
@@ -63,7 +76,7 @@ export function ProviderConfigDialog({
     },
     isValidPath: () => false,
     inputFilter: (text) =>
-      text.replace(/[^a-zA-Z0-9_\-.:]/g, '').replace(/[\r\n]/g, ''),
+      text.replace(/[^a-zA-Z0-9_\-.:+/=]/g, '').replace(/[\r\n]/g, ''),
     singleLine: true,
   });
 
@@ -123,11 +136,15 @@ export function ProviderConfigDialog({
   }, []);
 
   // Build model list
-  const modelItems = useMemo(() => models.map((model) => ({
-      value: model.id,
-      label: model.name || model.id,
-      key: model.id,
-    })), [models]);
+  const modelItems = useMemo(
+    () =>
+      models.map((model) => ({
+        value: model.id,
+        label: model.name || model.id,
+        key: model.id,
+      })),
+    [models],
+  );
 
   // Fetch models when provider is selected
   const fetchModels = useCallback(
@@ -259,8 +276,8 @@ export function ProviderConfigDialog({
 
         setStep('success');
 
-        // Auto-close after a short delay
-        setTimeout(() => {
+        // Auto-close after a short delay (with cleanup ref)
+        autoCloseTimeoutRef.current = setTimeout(() => {
           onClose();
         }, 1500);
       } catch (err) {
