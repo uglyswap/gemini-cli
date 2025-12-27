@@ -1,0 +1,132 @@
+/**
+ * Specialized Agent Types
+ * Defines agent specializations for the multi-agent orchestration system
+ */
+
+/**
+ * Domain categories for agent specialization
+ */
+export type AgentDomain = 
+  | 'frontend'
+  | 'backend'
+  | 'database'
+  | 'security'
+  | 'testing'
+  | 'devops'
+  | 'ai-ml'
+  | 'documentation'
+  | 'general';
+
+/**
+ * Model tier for cost/capability tradeoffs
+ */
+export type ModelTier = 'fast' | 'balanced' | 'powerful';
+
+/**
+ * Task complexity levels
+ */
+export type TaskComplexity = 'simple' | 'moderate' | 'complex';
+
+/**
+ * Quality check types
+ */
+export type QualityCheck = 
+  | 'typescript'
+  | 'eslint'
+  | 'prettier'
+  | 'accessibility'
+  | 'visual-regression'
+  | 'responsive'
+  | 'api-contract'
+  | 'security-scan'
+  | 'secrets-detection'
+  | 'dependency-audit'
+  | 'migration-safety'
+  | 'rls-coverage'
+  | 'index-analysis'
+  | 'test-coverage'
+  | 'test-quality'
+  | 'complexity-analysis'
+  | 'duplication-detection'
+  | 'performance-audit'
+  | 'bundle-analysis'
+  | 'documentation-coverage';
+
+/**
+ * Tool identifiers available to agents
+ */
+export type ToolId = 
+  | 'readFile'
+  | 'writeFile'
+  | 'editFile'
+  | 'glob'
+  | 'grep'
+  | 'shell'
+  | 'webFetch'
+  | 'googleSearch'
+  | 'memory'
+  | 'listDirectory';
+
+/**
+ * Specialized agent definition
+ */
+export interface AgentSpecialization {
+  /** Unique identifier */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Domain category */
+  domain: AgentDomain;
+  /** Model tier for cost/capability tradeoff */
+  modelTier: ModelTier;
+  /** Keywords that trigger this agent */
+  triggerKeywords: string[];
+  /** System prompt for this agent */
+  systemPrompt: string;
+  /** Tools this agent can use */
+  tools: ToolId[];
+  /** Quality checks specific to this agent */
+  qualityChecks: QualityCheck[];
+  /** Maximum files this agent should modify per task */
+  maxFilesPerTask: number;
+  /** Whether this agent can spawn sub-agents */
+  canSpawnSubAgents: boolean;
+  /** Priority weight for agent selection (higher = more likely) */
+  priority: number;
+}
+
+/**
+ * Agent selection result
+ */
+export interface AgentSelectionResult {
+  /** Selected agents in execution order */
+  agents: AgentSpecialization[];
+  /** Task complexity assessment */
+  complexity: TaskComplexity;
+  /** Selection scores for each agent */
+  scores: Map<string, number>;
+  /** Reasoning for selection */
+  reasoning: string;
+}
+
+/**
+ * Agent execution context passed between agents
+ */
+export interface AgentContext {
+  /** Original task description */
+  originalTask: string;
+  /** Current subtask (if decomposed) */
+  currentSubtask?: string;
+  /** Context from previous agent */
+  previousContext?: string;
+  /** Files modified so far */
+  modifiedFiles: string[];
+  /** Files read so far */
+  readFiles: string[];
+  /** Errors encountered */
+  errors: string[];
+  /** Warnings */
+  warnings: string[];
+  /** Custom metadata */
+  metadata: Record<string, unknown>;
+}
