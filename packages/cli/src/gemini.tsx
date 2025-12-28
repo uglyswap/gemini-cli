@@ -153,14 +153,68 @@ export function getNodeMemoryArgs(isDebugMode: boolean): string[] {
   return [];
 }
 
+/**
+ * Sanitizes an unknown value for safe logging.
+ * Prevents exposure of sensitive data and handles circular references.
+ */
+function sanitizeReasonForLogging(reason: unknown): string {
+  if (reason === null || reason === undefined) {
+    return String(reason);
+  }
+
+  if (reason instanceof Error) {
+    // Safe to use Error's built-in string representation
+    return reason.stack || reason.message || String(reason);
+  }
+
+  if (typeof reason === 'string') {
+    return reason;
+  }
+
+  if (typeof reason === 'number' || typeof reason === 'boolean') {
+    return String(reason);
+  }
+
+  // For objects, use JSON.stringify with a replacer to handle circular refs
+  // and limit depth to prevent exposing too much data
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(
+      reason,
+      (key, value) => {
+        // Skip potentially sensitive keys
+        if (
+          typeof key === 'string' &&
+          /password|secret|token|key|auth|credential/i.test(key)
+        ) {
+          return '[REDACTED]';
+        }
+        // Handle circular references
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular]';
+          }
+          seen.add(value);
+        }
+        return value;
+      },
+      2,
+    );
+  } catch {
+    return '[Object - unable to stringify]';
+  }
+}
+
 export function setupUnhandledRejectionHandler() {
   let unhandledRejectionOccurred = false;
   process.on('unhandledRejection', (reason, _promise) => {
+    // Sanitize reason before logging to prevent sensitive data exposure
+    const sanitizedReason = sanitizeReasonForLogging(reason);
     const errorMessage = `=========================================
 This is an unexpected error. Please file a bug report using the /bug tool.
 CRITICAL: Unhandled Promise Rejection!
 =========================================
-Reason: ${reason}${
+Reason: ${sanitizedReason}${
       reason instanceof Error && reason.stack
         ? `
 Stack trace:

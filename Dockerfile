@@ -1,4 +1,4 @@
-FROM docker.io/library/node:20-slim
+FROM docker.io/library/node:20.11.0-slim
 
 ARG SANDBOX_NAME="gemini-cli-sandbox"
 ARG CLI_VERSION_ARG
@@ -40,11 +40,15 @@ ENV PATH=$PATH:/usr/local/share/npm-global/bin
 USER node
 
 # install gemini-cli and clean up
-COPY packages/cli/dist/google-gemini-cli-*.tgz /tmp/gemini-cli.tgz
-COPY packages/core/dist/google-gemini-cli-core-*.tgz /tmp/gemini-core.tgz
+COPY --chown=node:node packages/cli/dist/google-gemini-cli-*.tgz /tmp/gemini-cli.tgz
+COPY --chown=node:node packages/core/dist/google-gemini-cli-core-*.tgz /tmp/gemini-core.tgz
 RUN npm install -g /tmp/gemini-cli.tgz /tmp/gemini-core.tgz \
-  && npm cache clean --force \
+  && npm cache verify \
   && rm -f /tmp/gemini-{cli,core}.tgz
+
+# Health check to verify the container is running properly
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node --version || exit 1
 
 # default entrypoint when none specified
 CMD ["gemini"]

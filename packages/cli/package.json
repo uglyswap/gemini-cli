@@ -34,7 +34,6 @@
     "@google/genai": "1.30.0",
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.23.0",
-    "@types/update-notifier": "^6.0.8",
     "ansi-regex": "^6.2.2",
     "clipboardy": "^5.0.0",
     "command-exists": "^1.2.9",
@@ -65,7 +64,7 @@
     "undici": "^7.10.0",
     "wrap-ansi": "9.0.2",
     "yargs": "^17.7.2",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@babel/runtime": "^7.27.6",
@@ -80,13 +79,14 @@
     "@types/semver": "^7.7.0",
     "@types/shell-quote": "^1.7.5",
     "@types/tar": "^6.1.13",
+    "@types/update-notifier": "^6.0.8",
     "@types/yargs": "^17.0.32",
     "archiver": "^7.0.1",
     "ink-testing-library": "^4.0.0",
     "pretty-format": "^30.0.2",
     "react-dom": "^19.2.0",
-    "typescript": "^5.3.3",
-    "vitest": "^3.1.1"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=20"

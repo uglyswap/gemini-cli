@@ -202,8 +202,8 @@ export default tseslint.config(
     },
     rules: {
       ...vitest.configs.recommended.rules,
-      'vitest/expect-expect': 'off',
-      'vitest/no-commented-out-tests': 'off',
+      'vitest/expect-expect': 'warn',
+      'vitest/no-commented-out-tests': 'warn',
     },
   },
   {

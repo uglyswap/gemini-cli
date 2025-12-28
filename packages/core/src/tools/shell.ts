@@ -49,6 +49,24 @@ import type { MessageBus } from '../confirmation-bus/message-bus.js';
 
 export const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 
+/**
+ * Escapes a string for safe use in shell commands.
+ * Prevents command injection by escaping special characters.
+ * @param arg The argument to escape
+ * @returns The escaped argument safe for shell use
+ */
+export function escapeShellArg(arg: string): string {
+  if (os.platform() === 'win32') {
+    // For PowerShell: escape special characters
+    // Replace single quotes with two single quotes, wrap in single quotes
+    return `'${arg.replace(/'/g, "''")}'`;
+  } else {
+    // For Bash: escape special characters
+    // Replace single quotes with '\'' and wrap in single quotes
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+}
+
 export interface ShellToolParams {
   command: string;
   description?: string;
@@ -188,7 +206,9 @@ export class ShellToolInvocation extends BaseToolInvocation<
             // wrap command to append subprocess pids (via pgrep) to temporary file
             let command = strippedCommand.trim();
             if (!command.endsWith('&')) command += ';';
-            return `{ ${command} }; __code=$?; pgrep -g 0 >${tempFilePath} 2>&1; exit $__code;`;
+            // Use escaped temp file path to prevent injection
+            const escapedTempPath = escapeShellArg(tempFilePath);
+            return `{ ${command} }; __code=$?; pgrep -g 0 >${escapedTempPath} 2>&1; exit $__code;`;
           })();
 
       const cwd = this.params.dir_path
@@ -398,8 +418,13 @@ export class ShellToolInvocation extends BaseToolInvocation<
       if (timeoutTimer) clearTimeout(timeoutTimer);
       signal.removeEventListener('abort', onAbort);
       timeoutController.signal.removeEventListener('abort', onAbort);
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+      } catch (cleanupError) {
+        // Log but don't throw - cleanup errors shouldn't break the flow
+        debugLogger.error(`Failed to cleanup temp file ${tempFilePath}: ${cleanupError}`);
       }
     }
   }

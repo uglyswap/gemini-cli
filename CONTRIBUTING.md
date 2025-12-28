@@ -365,7 +365,7 @@ specific debug settings.
 ### React DevTools
 
 To debug the CLI's React-based UI, you can use React DevTools. Ink, the library
-used for the CLI's interface, is compatible with React DevTools version 4.x.
+used for the CLI's interface, is compatible with React DevTools.
 
 1.  **Start the Gemini CLI in development mode:**
 
@@ -373,20 +373,20 @@ used for the CLI's interface, is compatible with React DevTools version 4.x.
     DEV=true npm start
     ```
 
-2.  **Install and run React DevTools version 4.28.5 (or the latest compatible
-    4.x version):**
+2.  **Install and run React DevTools:**
 
-    You can either install it globally:
+    The project uses `react-devtools-core@^6.1.2`. You can run it directly using
+    npx:
 
     ```bash
-    npm install -g react-devtools@4.28.5
-    react-devtools
+    npx react-devtools@6
     ```
 
-    Or run it directly using npx:
+    Or install it globally:
 
     ```bash
-    npx react-devtools@4.28.5
+    npm install -g react-devtools@6
+    react-devtools
     ```
 
     Your running CLI application should then connect to React DevTools.

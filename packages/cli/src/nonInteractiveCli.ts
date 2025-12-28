@@ -54,6 +54,25 @@ interface RunNonInteractiveParams {
   resumedSessionData?: ResumedSessionData;
 }
 
+/**
+ * Safely writes to stderr with error handling.
+ * @param message The message to write
+ */
+function safeStderrWrite(message: string): void {
+  try {
+    const result = process.stderr.write(message);
+    if (!result) {
+      // Stream buffer is full, wait for drain
+      process.stderr.once('drain', () => {
+        // Buffer drained, continue
+      });
+    }
+  } catch (error) {
+    // stderr write failed - log to debug logger if available
+    debugLogger.error(`Failed to write to stderr: ${error}`);
+  }
+}
+
 export async function runNonInteractive({
   config,
   settings,
@@ -75,13 +94,13 @@ export async function runNonInteractive({
 
     const handleUserFeedback = (payload: UserFeedbackPayload) => {
       const prefix = payload.severity.toUpperCase();
-      process.stderr.write(`[${prefix}] ${payload.message}\n`);
+      safeStderrWrite(`[${prefix}] ${payload.message}\n`);
       if (payload.error && config.getDebugMode()) {
         const errorToLog =
           payload.error instanceof Error
             ? payload.error.stack || payload.error.message
             : String(payload.error);
-        process.stderr.write(`${errorToLog}\n`);
+        safeStderrWrite(`${errorToLog}\n`);
       }
     };
 
@@ -107,47 +126,57 @@ export async function runNonInteractive({
         return;
       }
 
-      // Save original raw mode state
-      stdinWasRaw = process.stdin.isRaw || false;
+      try {
+        // Save original raw mode state - guard against undefined
+        stdinWasRaw = process.stdin.isRaw === true;
 
-      // Enable raw mode to capture individual keypresses
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-
-      // Setup readline to emit keypress events
-      rl = readline.createInterface({
-        input: process.stdin,
-        escapeCodeTimeout: 0,
-      });
-      readline.emitKeypressEvents(process.stdin, rl);
-
-      // Listen for Ctrl+C
-      const keypressHandler = (
-        str: string,
-        key: { name?: string; ctrl?: boolean },
-      ) => {
-        // Detect Ctrl+C: either ctrl+c key combo or raw character code 3
-        if ((key && key.ctrl && key.name === 'c') || str === '\u0003') {
-          // Only handle once
-          if (isAborting) {
-            return;
-          }
-
-          isAborting = true;
-
-          // Only show message if cancellation takes longer than 200ms
-          // This reduces verbosity for fast cancellations
-          cancelMessageTimer = setTimeout(() => {
-            process.stderr.write('\nCancelling...\n');
-          }, 200);
-
-          abortController.abort();
-          // Note: Don't exit here - let the abort flow through the system
-          // and trigger handleCancellationError() which will exit with proper code
+        // Enable raw mode to capture individual keypresses
+        try {
+          process.stdin.setRawMode(true);
+        } catch (setRawModeError) {
+          // setRawMode may fail in some environments
+          debugLogger.error(`Failed to set raw mode: ${setRawModeError}`);
+          return;
         }
-      };
+        process.stdin.resume();
 
-      process.stdin.on('keypress', keypressHandler);
+        // Setup readline to emit keypress events
+        rl = readline.createInterface({
+          input: process.stdin,
+          escapeCodeTimeout: 0,
+        });
+        readline.emitKeypressEvents(process.stdin, rl);
+
+        // Listen for Ctrl+C
+        const keypressHandler = (
+          str: string,
+          key: { name?: string; ctrl?: boolean },
+        ) => {
+          // Detect Ctrl+C: either ctrl+c key combo or raw character code 3
+          if ((key && key.ctrl && key.name === 'c') || str === '\u0003') {
+            // Only handle once
+            if (isAborting) {
+              return;
+            }
+
+            isAborting = true;
+
+            // Only show message if cancellation takes longer than 200ms
+            // This reduces verbosity for fast cancellations
+            cancelMessageTimer = setTimeout(() => {
+              safeStderrWrite('\nCancelling...\n');
+            }, 200);
+
+            abortController.abort();
+            // Note: Don't exit here - let the abort flow through the system
+            // and trigger handleCancellationError() which will exit with proper code
+          }
+        };
+
+        process.stdin.on('keypress', keypressHandler);
+      } catch (error) {
+        debugLogger.error(`Failed to setup stdin cancellation: ${error}`);
+      }
     };
 
     const cleanupStdinCancellation = () => {
@@ -158,18 +187,26 @@ export async function runNonInteractive({
       }
 
       // Cleanup readline and stdin listeners
-      if (rl) {
-        rl.close();
-        rl = null;
-      }
+      try {
+        if (rl) {
+          rl.close();
+          rl = null;
+        }
 
-      // Remove keypress listener
-      process.stdin.removeAllListeners('keypress');
+        // Remove keypress listener
+        process.stdin.removeAllListeners('keypress');
 
-      // Restore stdin to original state
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(stdinWasRaw);
-        process.stdin.pause();
+        // Restore stdin to original state
+        if (process.stdin.isTTY) {
+          try {
+            process.stdin.setRawMode(stdinWasRaw);
+          } catch (setRawModeError) {
+            debugLogger.error(`Failed to restore raw mode: ${setRawModeError}`);
+          }
+          process.stdin.pause();
+        }
+      } catch (error) {
+        debugLogger.error(`Failed to cleanup stdin cancellation: ${error}`);
       }
     };
 
@@ -275,7 +312,7 @@ export async function runNonInteractive({
             delta: true,
           });
         } else {
-          process.stderr.write(deprecateText);
+          safeStderrWrite(deprecateText);
         }
       }
       while (true) {
