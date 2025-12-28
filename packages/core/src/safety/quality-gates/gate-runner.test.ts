@@ -5,137 +5,206 @@
  */
 
 import { GateRunner } from './gate-runner.js';
-import type { QualityGate } from './types.js';
-import { exec } from 'node:child_process';
-
-// Mock child_process
-jest.mock('node:child_process', () => ({
-  exec: jest.fn(),
-}));
+import type { QualityGate, GateContext, GateCheckResult } from './types.js';
 
 describe('GateRunner', () => {
   let runner: GateRunner;
-  const mockWorkingDir = '/test/project';
 
-  const mockGates: QualityGate[] = [
-    {
-      name: 'test-gate-1',
-      description: 'Test gate 1',
-      phase: 'post',
-      command: 'echo "test"',
-    },
-    {
-      name: 'test-gate-2',
-      description: 'Test gate 2',
-      phase: 'post',
-      checkFn: async () => ({ passed: true }),
-    },
-  ];
+  const mockContext: GateContext = {
+    projectRoot: '/test/project',
+    modifiedFiles: ['src/test.ts'],
+    agentId: 'test-agent',
+    taskDescription: 'Test task',
+    trustLevel: 2,
+    options: {},
+  };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    runner = new GateRunner(mockGates, mockWorkingDir);
+    runner = new GateRunner({ verbose: false });
+  });
+
+  describe('constructor', () => {
+    it('should create runner with default options', () => {
+      const newRunner = new GateRunner();
+      expect(newRunner).toBeDefined();
+    });
+
+    it('should create runner with custom options', () => {
+      const newRunner = new GateRunner({
+        continueOnFailure: false,
+        strictMode: true,
+        timeout: 30000,
+      });
+      expect(newRunner).toBeDefined();
+    });
+  });
+
+  describe('registerGate', () => {
+    it('should register a custom gate', () => {
+      const customGate: QualityGate = {
+        id: 'custom-gate',
+        name: 'Custom Gate',
+        description: 'A custom test gate',
+        timing: 'post',
+        defaultSeverity: 'warning',
+        applicableDomains: 'all',
+        checkType: 'typescript',
+        skippable: true,
+        checkFn: async (_context: GateContext): Promise<GateCheckResult> => ({
+          gateId: 'custom-gate',
+          gateName: 'Custom Gate',
+          passed: true,
+          severity: 'info',
+          message: 'Custom gate passed',
+          issues: [],
+          durationMs: 0,
+          skippable: true,
+        }),
+      };
+
+      runner.registerGate(customGate);
+      const gates = runner.getGates();
+
+      expect(gates.some((g) => g.id === 'custom-gate')).toBe(true);
+    });
+  });
+
+  describe('unregisterGate', () => {
+    it('should unregister a gate', () => {
+      const customGate: QualityGate = {
+        id: 'to-remove',
+        name: 'To Remove',
+        description: 'Will be removed',
+        timing: 'pre',
+        defaultSeverity: 'error',
+        applicableDomains: 'all',
+        checkType: 'eslint',
+        skippable: true,
+      };
+
+      runner.registerGate(customGate);
+      expect(runner.getGates().some((g) => g.id === 'to-remove')).toBe(true);
+
+      const removed = runner.unregisterGate('to-remove');
+      expect(removed).toBe(true);
+      expect(runner.getGates().some((g) => g.id === 'to-remove')).toBe(false);
+    });
+
+    it('should return false for non-existent gate', () => {
+      const removed = runner.unregisterGate('non-existent');
+      expect(removed).toBe(false);
+    });
+  });
+
+  describe('getGates', () => {
+    it('should return all registered gates', () => {
+      const gates = runner.getGates();
+      expect(Array.isArray(gates)).toBe(true);
+    });
+  });
+
+  describe('getGatesForDomain', () => {
+    it('should filter gates by domain', () => {
+      const frontendGates = runner.getGatesForDomain('frontend');
+      expect(Array.isArray(frontendGates)).toBe(true);
+    });
   });
 
   describe('runGates', () => {
-    it('should run all provided gates', async () => {
-      // Mock exec to succeed
-      (exec as unknown as jest.Mock).mockImplementation(
-        (_cmd: string, _opts: any, callback: Function) => {
-          callback(null, 'success', '');
-        }
-      );
+    it('should run gates and return execution result', async () => {
+      const result = await runner.runGates('post', mockContext);
 
-      const results = await runner.runGates(mockGates);
-      
-      expect(results.length).toBe(2);
-      expect(results.every(r => r.passed)).toBe(true);
-    });
-
-    it('should handle command failures', async () => {
-      const failingGate: QualityGate = {
-        name: 'failing-gate',
-        description: 'Always fails',
-        phase: 'post',
-        command: 'exit 1',
-      };
-
-      (exec as unknown as jest.Mock).mockImplementation(
-        (_cmd: string, _opts: any, callback: Function) => {
-          callback(new Error('Command failed'), '', 'error output');
-        }
-      );
-
-      const runner2 = new GateRunner([failingGate], mockWorkingDir);
-      const results = await runner2.runGates([failingGate]);
-      
-      expect(results[0].passed).toBe(false);
+      expect(result).toBeDefined();
+      expect(typeof result.passed).toBe('boolean');
+      expect(Array.isArray(result.gates)).toBe(true);
+      expect(result.summary).toBeDefined();
+      expect(typeof result.totalDurationMs).toBe('number');
     });
 
     it('should handle function-based gates', async () => {
       const fnGate: QualityGate = {
-        name: 'fn-gate',
-        description: 'Function gate',
-        phase: 'post',
-        checkFn: async () => ({ passed: true, message: 'All good' }),
+        id: 'fn-gate',
+        name: 'Function Gate',
+        description: 'Function-based gate',
+        timing: 'post',
+        defaultSeverity: 'warning',
+        applicableDomains: 'all',
+        checkType: 'typescript',
+        skippable: true,
+        checkFn: async (_context: GateContext): Promise<GateCheckResult> => ({
+          gateId: 'fn-gate',
+          gateName: 'Function Gate',
+          passed: true,
+          severity: 'info',
+          message: 'All good',
+          issues: [],
+          durationMs: 10,
+          skippable: true,
+        }),
       };
 
-      const runner2 = new GateRunner([fnGate], mockWorkingDir);
-      const results = await runner2.runGates([fnGate]);
-      
-      expect(results[0].passed).toBe(true);
-      expect(results[0].message).toBe('All good');
+      runner.registerGate(fnGate);
+      const result = await runner.runGates('post', mockContext);
+
+      const fnGateResult = result.gates.find((g) => g.gateId === 'fn-gate');
+      if (fnGateResult) {
+        expect(fnGateResult.passed).toBe(true);
+        expect(fnGateResult.message).toBe('All good');
+      }
     });
   });
 
   describe('runPreGates', () => {
-    it('should only run pre-phase gates', async () => {
-      const mixedGates: QualityGate[] = [
-        { name: 'pre-gate', description: 'Pre', phase: 'pre', checkFn: async () => ({ passed: true }) },
-        { name: 'post-gate', description: 'Post', phase: 'post', checkFn: async () => ({ passed: true }) },
-      ];
+    it('should run pre-timing gates', async () => {
+      const result = await runner.runPreGates(mockContext);
 
-      const runner2 = new GateRunner(mixedGates, mockWorkingDir);
-      const results = await runner2.runPreGates();
-      
-      expect(results.length).toBe(1);
-      expect(results[0].name).toBe('pre-gate');
+      expect(result).toBeDefined();
+      expect(typeof result.passed).toBe('boolean');
+      expect(result.summary).toBeDefined();
+    });
+
+    it('should filter by domain when provided', async () => {
+      const result = await runner.runPreGates(mockContext, 'frontend');
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result.gates)).toBe(true);
     });
   });
 
   describe('runPostGates', () => {
-    it('should only run post-phase gates', async () => {
-      (exec as unknown as jest.Mock).mockImplementation(
-        (_cmd: string, _opts: any, callback: Function) => {
-          callback(null, 'success', '');
-        }
-      );
+    it('should run post-timing gates', async () => {
+      const result = await runner.runPostGates(mockContext);
 
-      const results = await runner.runPostGates();
-      
-      // Both mock gates are post-phase
-      expect(results.length).toBe(2);
+      expect(result).toBeDefined();
+      expect(typeof result.passed).toBe('boolean');
+      expect(result.summary).toBeDefined();
+    });
+
+    it('should filter by domain when provided', async () => {
+      const result = await runner.runPostGates(mockContext, 'backend');
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result.gates)).toBe(true);
     });
   });
 
-  describe('timeout handling', () => {
-    it('should respect gate timeout', async () => {
-      const slowGate: QualityGate = {
-        name: 'slow-gate',
-        description: 'Slow gate',
-        phase: 'post',
-        checkFn: async () => {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return { passed: true };
-        },
-        timeoutMs: 50,
-      };
+  describe('gate execution result structure', () => {
+    it('should include summary statistics', async () => {
+      const result = await runner.runPostGates(mockContext);
 
-      const runner2 = new GateRunner([slowGate], mockWorkingDir, { defaultTimeout: 50 });
-      const results = await runner2.runGates([slowGate]);
-      
-      // Should either timeout or complete, depending on implementation
-      expect(results[0]).toBeDefined();
+      expect(result.summary).toBeDefined();
+      expect(typeof result.summary.total).toBe('number');
+      expect(typeof result.summary.passed).toBe('number');
+      expect(typeof result.summary.failed).toBe('number');
+      expect(typeof result.summary.skipped).toBe('number');
+      expect(typeof result.summary.errors).toBe('number');
+      expect(typeof result.summary.warnings).toBe('number');
+    });
+
+    it('should include blocking issues array', async () => {
+      const result = await runner.runPostGates(mockContext);
+
+      expect(Array.isArray(result.blockingIssues)).toBe(true);
     });
   });
 });

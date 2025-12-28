@@ -1,10 +1,16 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Agent Registry
  * Defines all 28 specialized agents for the multi-agent orchestration system
  * Inspired by Agentic Dev System's specialized agent approach
  */
 
-import { AgentSpecialization } from './types.js';
+import type { AgentSpecialization } from './types.js';
 
 /**
  * Complete registry of specialized agents
@@ -17,10 +23,21 @@ export const AGENT_REGISTRY: AgentSpecialization[] = [
     id: 'frontend-developer',
     name: 'Frontend Developer',
     domain: 'frontend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'react', 'component', 'ui', 'tsx', 'jsx', 'css', 'tailwind', 
-      'frontend', 'styled', 'next.js', 'vue', 'svelte', 'html'
+      'react',
+      'component',
+      'ui',
+      'tsx',
+      'jsx',
+      'css',
+      'tailwind',
+      'frontend',
+      'styled',
+      'next.js',
+      'vue',
+      'svelte',
+      'html',
     ],
     systemPrompt: `You are a senior frontend developer specializing in React, TypeScript, and modern CSS frameworks.
 
@@ -45,15 +62,24 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 10,
   },
-  
+
   {
     id: 'ui-ux-designer',
     name: 'UI/UX Designer',
     domain: 'frontend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'design', 'style', 'layout', 'ux', 'user experience', 'responsive',
-      'theme', 'colors', 'typography', 'spacing', 'visual'
+      'design',
+      'style',
+      'layout',
+      'ux',
+      'user experience',
+      'responsive',
+      'theme',
+      'colors',
+      'typography',
+      'spacing',
+      'visual',
     ],
     systemPrompt: `You are a UI/UX specialist focused on creating beautiful, intuitive interfaces.
 
@@ -77,15 +103,22 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 8,
   },
-  
+
   {
     id: 'accessibility-expert',
     name: 'Accessibility Expert',
     domain: 'frontend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'a11y', 'accessibility', 'wcag', 'aria', 'screen reader',
-      'keyboard', 'focus', 'contrast', 'semantic'
+      'a11y',
+      'accessibility',
+      'wcag',
+      'aria',
+      'screen reader',
+      'keyboard',
+      'focus',
+      'contrast',
+      'semantic',
     ],
     systemPrompt: `You are an accessibility expert ensuring applications are usable by everyone.
 
@@ -110,15 +143,26 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'performance-optimizer',
     name: 'Performance Optimizer',
     domain: 'frontend',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'performance', 'optimize', 'slow', 'speed', 'bundle', 'lazy',
-      'cache', 'render', 'lighthouse', 'core web vitals', 'lcp', 'fid', 'cls'
+      'performance',
+      'optimize',
+      'slow',
+      'speed',
+      'bundle',
+      'lazy',
+      'cache',
+      'render',
+      'lighthouse',
+      'core web vitals',
+      'lcp',
+      'fid',
+      'cls',
     ],
     systemPrompt: `You are a frontend performance optimization specialist.
 
@@ -143,15 +187,22 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'animation-specialist',
     name: 'Animation Specialist',
     domain: 'frontend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'animation', 'transition', 'motion', 'framer', 'gsap',
-      'spring', 'keyframe', 'animate', 'gesture'
+      'animation',
+      'transition',
+      'motion',
+      'framer',
+      'gsap',
+      'spring',
+      'keyframe',
+      'animate',
+      'gesture',
     ],
     systemPrompt: `You are an animation and motion design specialist for web applications.
 
@@ -184,10 +235,19 @@ Guidelines:
     id: 'backend-developer',
     name: 'Backend Developer',
     domain: 'backend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'api', 'endpoint', 'server', 'route', 'middleware', 'backend',
-      'express', 'fastify', 'hono', 'node', 'controller'
+      'api',
+      'endpoint',
+      'server',
+      'route',
+      'middleware',
+      'backend',
+      'express',
+      'fastify',
+      'hono',
+      'node',
+      'controller',
     ],
     systemPrompt: `You are a senior backend developer specializing in Node.js/TypeScript APIs.
 
@@ -212,15 +272,21 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 10,
   },
-  
+
   {
     id: 'api-architect',
     name: 'API Architect',
     domain: 'backend',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'architecture', 'schema', 'api design', 'contract', 'versioning',
-      'openapi', 'swagger', 'specification'
+      'architecture',
+      'schema',
+      'api design',
+      'contract',
+      'versioning',
+      'openapi',
+      'swagger',
+      'specification',
     ],
     systemPrompt: `You are an API architect specializing in scalable, maintainable API design.
 
@@ -245,15 +311,22 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 8,
   },
-  
+
   {
     id: 'microservices-expert',
     name: 'Microservices Expert',
     domain: 'backend',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'microservice', 'distributed', 'message queue', 'kafka', 'rabbitmq',
-      'event-driven', 'saga', 'cqrs', 'service mesh'
+      'microservice',
+      'distributed',
+      'message queue',
+      'kafka',
+      'rabbitmq',
+      'event-driven',
+      'saga',
+      'cqrs',
+      'service mesh',
     ],
     systemPrompt: `You are a microservices architecture expert.
 
@@ -278,15 +351,23 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 6,
   },
-  
+
   {
     id: 'integration-specialist',
     name: 'Integration Specialist',
     domain: 'backend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'integration', 'webhook', 'oauth', 'third-party', 'external api',
-      'stripe', 'twilio', 'sendgrid', 'aws', 'sdk'
+      'integration',
+      'webhook',
+      'oauth',
+      'third-party',
+      'external api',
+      'stripe',
+      'twilio',
+      'sendgrid',
+      'aws',
+      'sdk',
     ],
     systemPrompt: `You are a third-party integration specialist.
 
@@ -305,21 +386,36 @@ Guidelines:
 - Log all external API interactions
 - Consider timeout and fallback strategies
 - Mock external services in tests`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell', 'webFetch'],
+    tools: [
+      'readFile',
+      'writeFile',
+      'editFile',
+      'glob',
+      'grep',
+      'shell',
+      'webFetch',
+    ],
     qualityChecks: ['security-scan', 'secrets-detection'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'graphql-developer',
     name: 'GraphQL Developer',
     domain: 'backend',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'graphql', 'query', 'mutation', 'subscription', 'resolver',
-      'apollo', 'schema', 'type', 'federation'
+      'graphql',
+      'query',
+      'mutation',
+      'subscription',
+      'resolver',
+      'apollo',
+      'schema',
+      'type',
+      'federation',
     ],
     systemPrompt: `You are a GraphQL development specialist.
 
@@ -352,10 +448,19 @@ Guidelines:
     id: 'database-architect',
     name: 'Database Architect',
     domain: 'database',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'database', 'schema', 'table', 'relation', 'postgres', 'supabase',
-      'mysql', 'mongodb', 'prisma', 'drizzle', 'sql'
+      'database',
+      'schema',
+      'table',
+      'relation',
+      'postgres',
+      'supabase',
+      'mysql',
+      'mongodb',
+      'prisma',
+      'drizzle',
+      'sql',
     ],
     systemPrompt: `You are a database architect specializing in PostgreSQL and modern ORMs.
 
@@ -380,15 +485,22 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 9,
   },
-  
+
   {
     id: 'query-optimizer',
     name: 'Query Optimizer',
     domain: 'database',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'query', 'slow query', 'optimize', 'explain', 'index',
-      'n+1', 'join', 'performance', 'execution plan'
+      'query',
+      'slow query',
+      'optimize',
+      'explain',
+      'index',
+      'n+1',
+      'join',
+      'performance',
+      'execution plan',
     ],
     systemPrompt: `You are a database query optimization specialist.
 
@@ -413,15 +525,20 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'migration-specialist',
     name: 'Migration Specialist',
     domain: 'database',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'migration', 'migrate', 'schema change', 'alter', 'data migration',
-      'backward compatible', 'rollback'
+      'migration',
+      'migrate',
+      'schema change',
+      'alter',
+      'data migration',
+      'backward compatible',
+      'rollback',
     ],
     systemPrompt: `You are a database migration specialist.
 
@@ -454,10 +571,19 @@ Guidelines:
     id: 'security-engineer',
     name: 'Security Engineer',
     domain: 'security',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'security', 'auth', 'authentication', 'authorization', 'owasp',
-      'vulnerability', 'rls', 'encryption', 'xss', 'injection', 'csrf'
+      'security',
+      'auth',
+      'authentication',
+      'authorization',
+      'owasp',
+      'vulnerability',
+      'rls',
+      'encryption',
+      'xss',
+      'injection',
+      'csrf',
     ],
     systemPrompt: `You are a security engineer focused on application security.
 
@@ -482,15 +608,20 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 10,
   },
-  
+
   {
     id: 'penetration-tester',
     name: 'Penetration Tester',
     domain: 'security',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'pentest', 'vulnerability scan', 'security audit', 'exploit',
-      'attack vector', 'threat model', 'security test'
+      'pentest',
+      'vulnerability scan',
+      'security audit',
+      'exploit',
+      'attack vector',
+      'threat model',
+      'security test',
     ],
     systemPrompt: `You are a penetration testing specialist.
 
@@ -515,15 +646,22 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 6,
   },
-  
+
   {
     id: 'compliance-auditor',
     name: 'Compliance Auditor',
     domain: 'security',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'compliance', 'gdpr', 'hipaa', 'soc2', 'pci', 'privacy',
-      'data protection', 'audit', 'regulation'
+      'compliance',
+      'gdpr',
+      'hipaa',
+      'soc2',
+      'pci',
+      'privacy',
+      'data protection',
+      'audit',
+      'regulation',
     ],
     systemPrompt: `You are a compliance and privacy auditor.
 
@@ -556,10 +694,18 @@ Guidelines:
     id: 'test-engineer',
     name: 'Test Engineer',
     domain: 'testing',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'test', 'testing', 'unit test', 'coverage', 'tdd', 'jest',
-      'vitest', 'mock', 'fixture', 'assertion'
+      'test',
+      'testing',
+      'unit test',
+      'coverage',
+      'tdd',
+      'jest',
+      'vitest',
+      'mock',
+      'fixture',
+      'assertion',
     ],
     systemPrompt: `You are a test engineer specializing in comprehensive testing strategies.
 
@@ -584,15 +730,21 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 9,
   },
-  
+
   {
     id: 'e2e-tester',
     name: 'E2E Tester',
     domain: 'testing',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'e2e', 'end-to-end', 'playwright', 'cypress', 'integration test',
-      'browser test', 'ui test', 'automation'
+      'e2e',
+      'end-to-end',
+      'playwright',
+      'cypress',
+      'integration test',
+      'browser test',
+      'ui test',
+      'automation',
     ],
     systemPrompt: `You are an end-to-end testing specialist.
 
@@ -617,15 +769,21 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'code-reviewer',
     name: 'Code Reviewer',
     domain: 'testing',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'review', 'code review', 'quality', 'refactor', 'clean code',
-      'best practices', 'code smell', 'technical debt'
+      'review',
+      'code review',
+      'quality',
+      'refactor',
+      'clean code',
+      'best practices',
+      'code smell',
+      'technical debt',
     ],
     systemPrompt: `You are a senior code reviewer focused on code quality.
 
@@ -658,10 +816,16 @@ Guidelines:
     id: 'devops-engineer',
     name: 'DevOps Engineer',
     domain: 'devops',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'devops', 'deploy', 'docker', 'kubernetes', 'container',
-      'pipeline', 'infrastructure', 'cloud'
+      'devops',
+      'deploy',
+      'docker',
+      'kubernetes',
+      'container',
+      'pipeline',
+      'infrastructure',
+      'cloud',
     ],
     systemPrompt: `You are a DevOps engineer specializing in modern deployment practices.
 
@@ -686,15 +850,22 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 8,
   },
-  
+
   {
     id: 'infrastructure-architect',
     name: 'Infrastructure Architect',
     domain: 'devops',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'infrastructure', 'terraform', 'aws', 'gcp', 'azure',
-      'vpc', 'networking', 'iac', 'cloudformation'
+      'infrastructure',
+      'terraform',
+      'aws',
+      'gcp',
+      'azure',
+      'vpc',
+      'networking',
+      'iac',
+      'cloudformation',
     ],
     systemPrompt: `You are an infrastructure architect.
 
@@ -719,15 +890,22 @@ Guidelines:
     canSpawnSubAgents: true,
     priority: 7,
   },
-  
+
   {
     id: 'ci-cd-specialist',
     name: 'CI/CD Specialist',
     domain: 'devops',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'ci', 'cd', 'github actions', 'gitlab ci', 'jenkins',
-      'pipeline', 'workflow', 'automation', 'build'
+      'ci',
+      'cd',
+      'github actions',
+      'gitlab ci',
+      'jenkins',
+      'pipeline',
+      'workflow',
+      'automation',
+      'build',
     ],
     systemPrompt: `You are a CI/CD pipeline specialist.
 
@@ -760,10 +938,18 @@ Guidelines:
     id: 'ai-engineer',
     name: 'AI Engineer',
     domain: 'ai-ml',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'ai', 'llm', 'openai', 'anthropic', 'gemini', 'langchain',
-      'embedding', 'vector', 'rag', 'prompt'
+      'ai',
+      'llm',
+      'openai',
+      'anthropic',
+      'gemini',
+      'langchain',
+      'embedding',
+      'vector',
+      'rag',
+      'prompt',
     ],
     systemPrompt: `You are an AI/LLM integration engineer.
 
@@ -782,21 +968,35 @@ Guidelines:
 - Use streaming for better UX
 - Implement proper caching
 - Add evaluation metrics`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell', 'webFetch'],
+    tools: [
+      'readFile',
+      'writeFile',
+      'editFile',
+      'glob',
+      'grep',
+      'shell',
+      'webFetch',
+    ],
     qualityChecks: ['typescript', 'secrets-detection'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: true,
     priority: 8,
   },
-  
+
   {
     id: 'ml-ops-specialist',
     name: 'MLOps Specialist',
     domain: 'ai-ml',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'mlops', 'model', 'training', 'inference', 'pipeline',
-      'feature store', 'model registry', 'experiment tracking'
+      'mlops',
+      'model',
+      'training',
+      'inference',
+      'pipeline',
+      'feature store',
+      'model registry',
+      'experiment tracking',
     ],
     systemPrompt: `You are an MLOps specialist.
 
@@ -821,15 +1021,20 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 6,
   },
-  
+
   {
     id: 'prompt-engineer',
     name: 'Prompt Engineer',
     domain: 'ai-ml',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'prompt', 'prompt engineering', 'system prompt', 'few-shot',
-      'chain of thought', 'instruction', 'template'
+      'prompt',
+      'prompt engineering',
+      'system prompt',
+      'few-shot',
+      'chain of thought',
+      'instruction',
+      'template',
     ],
     systemPrompt: `You are a prompt engineering specialist.
 
@@ -862,10 +1067,16 @@ Guidelines:
     id: 'technical-writer',
     name: 'Technical Writer',
     domain: 'documentation',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'documentation', 'readme', 'docs', 'guide', 'tutorial',
-      'howto', 'explain', 'document'
+      'documentation',
+      'readme',
+      'docs',
+      'guide',
+      'tutorial',
+      'howto',
+      'explain',
+      'document',
     ],
     systemPrompt: `You are a technical documentation writer.
 
@@ -890,15 +1101,19 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 7,
   },
-  
+
   {
     id: 'api-documenter',
     name: 'API Documenter',
     domain: 'documentation',
-    modelTier: 'balanced',
+    modelTier: 'pro',
     triggerKeywords: [
-      'api docs', 'openapi', 'swagger', 'postman', 'api reference',
-      'endpoint documentation'
+      'api docs',
+      'openapi',
+      'swagger',
+      'postman',
+      'api reference',
+      'endpoint documentation',
     ],
     systemPrompt: `You are an API documentation specialist.
 
@@ -923,15 +1138,20 @@ Guidelines:
     canSpawnSubAgents: false,
     priority: 6,
   },
-  
+
   {
     id: 'architecture-documenter',
     name: 'Architecture Documenter',
     domain: 'documentation',
-    modelTier: 'powerful',
+    modelTier: 'ultra',
     triggerKeywords: [
-      'adr', 'architecture decision', 'diagram', 'c4', 'sequence diagram',
-      'system design', 'technical spec'
+      'adr',
+      'architecture decision',
+      'diagram',
+      'c4',
+      'sequence diagram',
+      'system design',
+      'technical spec',
     ],
     systemPrompt: `You are an architecture documentation specialist.
 
@@ -962,19 +1182,21 @@ Guidelines:
  * Get agent by ID
  */
 export function getAgentById(id: string): AgentSpecialization | undefined {
-  return AGENT_REGISTRY.find(agent => agent.id === id);
+  return AGENT_REGISTRY.find((agent) => agent.id === id);
 }
 
 /**
  * Get agents by domain
  */
-export function getAgentsByDomain(domain: AgentSpecialization['domain']): AgentSpecialization[] {
-  return AGENT_REGISTRY.filter(agent => agent.domain === domain);
+export function getAgentsByDomain(
+  domain: AgentSpecialization['domain'],
+): AgentSpecialization[] {
+  return AGENT_REGISTRY.filter((agent) => agent.domain === domain);
 }
 
 /**
  * Get all agent IDs
  */
 export function getAllAgentIds(): string[] {
-  return AGENT_REGISTRY.map(agent => agent.id);
+  return AGENT_REGISTRY.map((agent) => agent.id);
 }

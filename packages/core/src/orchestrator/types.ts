@@ -1,16 +1,26 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Enhanced Orchestrator Types
  * For the main multi-agent orchestration system
  */
 
 import { TrustLevel } from '../trust/types.js';
-import { AgentSpecialization, TaskComplexity, AgentContext } from '../agents/specialized/types.js';
-import { GateExecutionResult } from '../safety/quality-gates/types.js';
+import type {
+  AgentSpecialization,
+  TaskComplexity,
+  AgentContext,
+} from '../agents/specialized/types.js';
+import type { GateExecutionResult } from '../safety/quality-gates/types.js';
 
 /**
  * Execution phases
  */
-export type ExecutionPhase = 
+export type ExecutionPhase =
   | 'init'
   | 'explain'
   | 'snapshot'
@@ -18,7 +28,20 @@ export type ExecutionPhase =
   | 'validate'
   | 'report'
   | 'error'
-  | 'rollback';
+  | 'rollback'
+  | 'INIT'
+  | 'EXPLAIN'
+  | 'SNAPSHOT'
+  | 'EXECUTE'
+  | 'VALIDATE'
+  | 'REPORT'
+  | 'ERROR'
+  | 'ROLLBACK';
+
+/**
+ * Execution step (alias for backward compatibility)
+ */
+export type ExecutionStep = ExecutionPhase;
 
 /**
  * Task input to the orchestrator
@@ -118,6 +141,8 @@ export interface TaskExecutionResult {
 export interface OrchestratorConfig {
   /** Project root directory */
   projectRoot: string;
+  /** Working directory for execution */
+  workingDirectory?: string;
   /** Enable trust cascade system */
   enableTrustCascade: boolean;
   /** Enable multi-agent routing */
@@ -126,6 +151,8 @@ export interface OrchestratorConfig {
   enableSnapshots: boolean;
   /** Enable quality gates */
   enableQualityGates: boolean;
+  /** Quality gates to run */
+  qualityGates?: string[];
   /** Trust level threshold for requiring snapshot */
   snapshotTrustThreshold: TrustLevel;
   /** Maximum agents per task */
@@ -136,12 +163,127 @@ export interface OrchestratorConfig {
   autoRollbackOnFailure: boolean;
   /** Enable verbose logging */
   verbose: boolean;
+  /** Require approval above this trust level */
+  requireApprovalAbove?: TrustLevel;
   /** Model configuration */
   modelConfig: {
     fastModel: string;
     balancedModel: string;
     powerfulModel: string;
   };
+}
+
+/**
+ * Execution step in a plan
+ */
+export interface ExecutionPlanStep {
+  /** Execution order */
+  order: number;
+  /** Agent ID */
+  agentId: string;
+  /** Agent name */
+  agentName: string;
+  /** Step description */
+  description: string;
+  /** Trust level for this step */
+  trustLevel: TrustLevel;
+  /** Privileges for this step */
+  privileges: unknown;
+  /** Estimated complexity */
+  estimatedComplexity: TaskComplexity | string;
+}
+
+/**
+ * Execution plan for a task
+ */
+export interface ExecutionPlan {
+  /** Task description */
+  task: string;
+  /** Ordered list of agents to execute (legacy format) */
+  agents?: Array<{
+    agent: AgentSpecialization;
+    score: number;
+  }>;
+  /** Execution steps */
+  steps?: ExecutionPlanStep[];
+  /** Total number of agents */
+  totalAgents?: number;
+  /** Estimated complexity */
+  complexity?: TaskComplexity;
+  /** Estimated complexity as string */
+  estimatedComplexity?: string;
+  /** Files likely to be affected */
+  affectedFiles?: string[];
+  /** Explanation of the plan */
+  explanation?: string;
+  /** Trust privileges per agent */
+  trustPrivileges?: Record<string, unknown>;
+  /** Creation timestamp */
+  createdAt?: Date;
+}
+
+/**
+ * Single agent execution record
+ */
+export interface AgentExecution {
+  /** Agent ID */
+  agentId: string;
+  /** Agent name */
+  agentName: string;
+  /** Whether execution succeeded */
+  success: boolean;
+  /** Start timestamp */
+  startTime?: number;
+  /** End timestamp */
+  endTime?: number;
+  /** Duration in milliseconds */
+  durationMs?: number;
+  /** Output from the agent */
+  output: unknown;
+  /** Error if failed */
+  error?: string;
+  /** Files modified */
+  modifiedFiles?: string[];
+  /** Alias for modifiedFiles (backward compatibility) */
+  filesModified?: string[];
+  /** Tools used during execution */
+  toolsUsed?: string[];
+  /** Trust level during execution */
+  trustLevel?: TrustLevel;
+}
+
+/**
+ * Execution report after completing a task
+ */
+export interface ExecutionReport {
+  /** Task that was executed */
+  task: string;
+  /** Execution plan used */
+  plan: ExecutionPlan;
+  /** All agent executions */
+  executions?: AgentExecution[];
+  /** Alias for executions (backward compatibility) */
+  agentExecutions?: AgentExecution[];
+  /** Overall success */
+  success: boolean;
+  /** Failure reason if not successful */
+  failureReason?: string;
+  /** Error message if failed */
+  error?: string;
+  /** Snapshot ID if created */
+  snapshotId?: string;
+  /** Whether rollback occurred */
+  rolledBack?: boolean;
+  /** Total execution time in ms */
+  totalTimeMs?: number;
+  /** Alias for totalTimeMs (backward compatibility) */
+  totalDurationMs?: number;
+  /** Quality gate results */
+  gateResults?: unknown[];
+  /** Alias for gateResults (backward compatibility) */
+  qualityGateResults?: unknown[];
+  /** Completion timestamp */
+  completedAt?: Date;
 }
 
 /**
@@ -170,14 +312,15 @@ export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
  */
 export type PhaseCallback = (
   phase: ExecutionPhase,
-  data: unknown
+  data?: unknown,
 ) => void | Promise<void>;
 
 /**
  * Approval callback for user confirmation
+ * Can accept either full task info or just the execution plan
  */
 export type ApprovalCallback = (
-  task: OrchestratorTask,
-  agents: AgentSpecialization[],
-  context: AgentContext
+  planOrTask: ExecutionPlan | OrchestratorTask,
+  agents?: AgentSpecialization[],
+  context?: AgentContext,
 ) => Promise<boolean>;

@@ -1,9 +1,18 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Quality Gates Types
  * For pre/post execution validation
  */
 
-import { AgentDomain, QualityCheck } from '../../agents/specialized/types.js';
+import type {
+  AgentDomain,
+  QualityCheck,
+} from '../../agents/specialized/types.js';
 
 /**
  * Severity levels for gate results
@@ -139,3 +148,13 @@ export interface GateRunnerOptions {
   /** Enable verbose logging */
   verbose?: boolean;
 }
+
+/**
+ * Alias for GateCheckResult (backward compatibility)
+ */
+export type GateResult = GateCheckResult;
+
+/**
+ * Alias for GateRunnerOptions (backward compatibility)
+ */
+export type GateRunnerConfig = GateRunnerOptions;

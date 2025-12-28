@@ -1,4 +1,10 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Snapshot Manager Types
  * For creating and restoring file snapshots
  */
@@ -138,3 +144,8 @@ export interface SnapshotManagerOptions {
   /** Enable compression */
   compress?: boolean;
 }
+
+/**
+ * Alias for SnapshotManagerOptions (backward compatibility)
+ */
+export type SnapshotManagerConfig = SnapshotManagerOptions;

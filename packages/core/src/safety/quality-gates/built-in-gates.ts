@@ -1,11 +1,17 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Built-in Quality Gates
  * Pre-configured gates for common quality checks
  */
 
-import { QualityGate, GateContext, GateCheckResult } from './types.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import type { QualityGate, GateContext, GateCheckResult } from './types.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 /**
  * Check if a file exists in the project
@@ -70,9 +76,16 @@ export const BUILT_IN_GATES: QualityGate[] = [
     skippable: true,
     checkFn: async (context: GateContext): Promise<GateCheckResult> => {
       // Check if eslint config exists
-      const configFiles = ['.eslintrc.js', '.eslintrc.json', '.eslintrc.yml', 'eslint.config.js'];
-      const hasConfig = configFiles.some(f => fileExists(context.projectRoot, f));
-      
+      const configFiles = [
+        '.eslintrc.js',
+        '.eslintrc.json',
+        '.eslintrc.yml',
+        'eslint.config.js',
+      ];
+      const hasConfig = configFiles.some((f) =>
+        fileExists(context.projectRoot, f),
+      );
+
       if (!hasConfig) {
         return {
           gateId: 'eslint',
@@ -124,24 +137,41 @@ export const BUILT_IN_GATES: QualityGate[] = [
     checkType: 'secrets-detection',
     skippable: false,
     checkFn: async (context: GateContext): Promise<GateCheckResult> => {
-      const issues: Array<{ severity: 'error' | 'warning' | 'info'; message: string; file?: string; rule?: string }> = [];
-      
+      const issues: Array<{
+        severity: 'error' | 'warning' | 'info';
+        message: string;
+        file?: string;
+        rule?: string;
+      }> = [];
+
       // Patterns that might indicate secrets
       const secretPatterns = [
-        { pattern: /api[_-]?key\s*[:=]\s*['"][^'"]{10,}['"]/gi, name: 'API Key' },
-        { pattern: /secret[_-]?key\s*[:=]\s*['"][^'"]{10,}['"]/gi, name: 'Secret Key' },
+        {
+          pattern: /api[_-]?key\s*[:=]\s*['"][^'"]{10,}['"]/gi,
+          name: 'API Key',
+        },
+        {
+          pattern: /secret[_-]?key\s*[:=]\s*['"][^'"]{10,}['"]/gi,
+          name: 'Secret Key',
+        },
         { pattern: /password\s*[:=]\s*['"][^'"]{6,}['"]/gi, name: 'Password' },
-        { pattern: /private[_-]?key\s*[:=]\s*['"][^'"]{20,}['"]/gi, name: 'Private Key' },
-        { pattern: /bearer\s+[a-zA-Z0-9_\-\.]+/gi, name: 'Bearer Token' },
+        {
+          pattern: /private[_-]?key\s*[:=]\s*['"][^'"]{20,}['"]/gi,
+          name: 'Private Key',
+        },
+        { pattern: /bearer\s+[a-zA-Z0-9_\-.]+/gi, name: 'Bearer Token' },
         { pattern: /sk_live_[a-zA-Z0-9]+/g, name: 'Stripe Live Key' },
-        { pattern: /-----BEGIN (RSA |EC )?PRIVATE KEY-----/g, name: 'PEM Private Key' },
+        {
+          pattern: /-----BEGIN (RSA |EC )?PRIVATE KEY-----/g,
+          name: 'PEM Private Key',
+        },
       ];
 
       for (const filePath of context.modifiedFiles) {
-        const fullPath = path.isAbsolute(filePath) 
-          ? filePath 
+        const fullPath = path.isAbsolute(filePath)
+          ? filePath
           : path.join(context.projectRoot, filePath);
-        
+
         // Skip non-existent files and common non-code files
         if (!fs.existsSync(fullPath)) continue;
         if (filePath.includes('node_modules')) continue;
@@ -150,7 +180,7 @@ export const BUILT_IN_GATES: QualityGate[] = [
 
         try {
           const content = fs.readFileSync(fullPath, 'utf-8');
-          
+
           for (const { pattern, name } of secretPatterns) {
             if (pattern.test(content)) {
               issues.push({
@@ -173,9 +203,10 @@ export const BUILT_IN_GATES: QualityGate[] = [
         gateName: 'Secrets Detection',
         passed: issues.length === 0,
         severity: issues.length > 0 ? 'error' : 'info',
-        message: issues.length === 0 
-          ? 'No secrets detected' 
-          : `Found ${issues.length} potential secret(s)`,
+        message:
+          issues.length === 0
+            ? 'No secrets detected'
+            : `Found ${issues.length} potential secret(s)`,
         issues,
         durationMs: 0,
         skippable: false,
@@ -195,11 +226,13 @@ export const BUILT_IN_GATES: QualityGate[] = [
     skippable: true,
     checkFn: async (context: GateContext): Promise<GateCheckResult> => {
       // Check if test config exists
-      const hasJest = fileExists(context.projectRoot, 'jest.config.js') ||
-                      fileExists(context.projectRoot, 'jest.config.ts');
-      const hasVitest = fileExists(context.projectRoot, 'vitest.config.ts') ||
-                        fileExists(context.projectRoot, 'vitest.config.js');
-      
+      const hasJest =
+        fileExists(context.projectRoot, 'jest.config.js') ||
+        fileExists(context.projectRoot, 'jest.config.ts');
+      const hasVitest =
+        fileExists(context.projectRoot, 'vitest.config.ts') ||
+        fileExists(context.projectRoot, 'vitest.config.js');
+
       if (!hasJest && !hasVitest) {
         return {
           gateId: 'test-coverage',
@@ -238,7 +271,12 @@ export const BUILT_IN_GATES: QualityGate[] = [
     checkType: 'bundle-analysis',
     skippable: true,
     checkFn: async (context: GateContext): Promise<GateCheckResult> => {
-      const issues: Array<{ severity: 'error' | 'warning' | 'info'; message: string; file?: string; rule?: string }> = [];
+      const issues: Array<{
+        severity: 'error' | 'warning' | 'info';
+        message: string;
+        file?: string;
+        rule?: string;
+      }> = [];
       const MAX_FILE_SIZE = 500 * 1024; // 500KB
 
       for (const filePath of context.modifiedFiles) {
@@ -268,9 +306,10 @@ export const BUILT_IN_GATES: QualityGate[] = [
         gateName: 'File Size Check',
         passed: issues.length === 0,
         severity: issues.length > 0 ? 'warning' : 'info',
-        message: issues.length === 0
-          ? 'All files within size limits'
-          : `Found ${issues.length} large file(s)`,
+        message:
+          issues.length === 0
+            ? 'All files within size limits'
+            : `Found ${issues.length} large file(s)`,
         issues,
         durationMs: 0,
         skippable: true,
@@ -289,7 +328,13 @@ export const BUILT_IN_GATES: QualityGate[] = [
     checkType: 'complexity-analysis',
     skippable: true,
     checkFn: async (context: GateContext): Promise<GateCheckResult> => {
-      const issues: Array<{ severity: 'error' | 'warning' | 'info'; message: string; file?: string; rule?: string; line?: number }> = [];
+      const issues: Array<{
+        severity: 'error' | 'warning' | 'info';
+        message: string;
+        file?: string;
+        rule?: string;
+        line?: number;
+      }> = [];
       const MAX_FUNCTION_LINES = 100;
       const MAX_FILE_LINES = 500;
 
@@ -317,13 +362,16 @@ export const BUILT_IN_GATES: QualityGate[] = [
           }
 
           // Simple function length check (very basic)
-          const functionPattern = /^\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(async\s*)?\([^)]*\)\s*=>)/gm;
+          const functionPattern =
+            /^\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(async\s*)?\([^)]*\)\s*=>)/gm;
           let match;
           let lastFunctionLine = 0;
-          
+
           while ((match = functionPattern.exec(content)) !== null) {
-            const lineNumber = content.substring(0, match.index).split('\n').length;
-            
+            const lineNumber = content
+              .substring(0, match.index)
+              .split('\n').length;
+
             if (lastFunctionLine > 0) {
               const functionLength = lineNumber - lastFunctionLine;
               if (functionLength > MAX_FUNCTION_LINES) {
@@ -336,7 +384,7 @@ export const BUILT_IN_GATES: QualityGate[] = [
                 });
               }
             }
-            
+
             lastFunctionLine = lineNumber;
           }
         } catch {
@@ -347,11 +395,12 @@ export const BUILT_IN_GATES: QualityGate[] = [
       return {
         gateId: 'complexity',
         gateName: 'Code Complexity Check',
-        passed: issues.filter(i => i.severity === 'error').length === 0,
+        passed: issues.filter((i) => i.severity === 'error').length === 0,
         severity: issues.length > 0 ? 'warning' : 'info',
-        message: issues.length === 0
-          ? 'Code complexity within acceptable limits'
-          : `Found ${issues.length} complexity issue(s)`,
+        message:
+          issues.length === 0
+            ? 'Code complexity within acceptable limits'
+            : `Found ${issues.length} complexity issue(s)`,
         issues,
         durationMs: 0,
         skippable: true,

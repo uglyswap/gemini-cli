@@ -2,9 +2,6 @@
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
- *
- * OpenAI-Compatible Content Generator
- * Supports Z.AI (GLM4.7), OpenRouter, Ollama, LM Studio, and other OpenAI-compatible APIs
  */
 
 import OpenAI from 'openai';
@@ -12,9 +9,8 @@ import type {
   ContentGenerator,
   ContentGeneratorConfig,
 } from './contentGenerator.js';
-import {
+import type {
   CountTokensResponse,
-  GenerateContentResponse,
   GenerateContentParameters,
   CountTokensParameters,
   EmbedContentResponse,
@@ -22,13 +18,17 @@ import {
   Content,
   Part,
   Candidate,
+  ContentUnion,
+  ToolListUnion,
+  Tool as GenaiTool,
+} from '@google/genai';
+import {
+  GenerateContentResponse,
   FinishReason,
   GenerateContentResponsePromptFeedback,
   BlockedReason,
   GenerateContentResponseUsageMetadata,
-  ContentUnion,
 } from '@google/genai';
-import type { ToolListUnion, Tool as GenaiTool } from '@google/genai';
 
 interface OpenAIUsage {
   completion_tokens?: number;
@@ -51,8 +51,8 @@ function mapModelName(model: string, baseUrl: string): string {
       'gemini-2.5-pro': 'glm-4.7',
       'gemini-2.5-flash': 'glm-4.7',
       'gemini-pro': 'glm-4.7',
-      'pro': 'glm-4.7',
-      'flash': 'glm-4.7',
+      pro: 'glm-4.7',
+      flash: 'glm-4.7',
     };
     return zaiModels[model] || 'glm-4.7';
   }
@@ -81,7 +81,9 @@ export function createOpenAICompatibleContentGenerator(
   httpOptions: { headers: Record<string, string> },
 ): ContentGenerator {
   const baseUrl = config.openAICompatibleBaseUrl;
-  const modelName = config.openAICompatibleModel || mapModelName(config.model, baseUrl);
+  const modelName =
+    config.openAICompatibleModel ||
+    mapModelName(config.model || 'gemini-2.5-pro', baseUrl);
 
   const client = new OpenAI({
     baseURL: baseUrl,
@@ -313,7 +315,7 @@ function convertToOpenAIFormat(
         .join('\n');
 
       return {
-        role: (role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        role: (role === 'user' ? 'user' : 'assistant'),
         content: text,
       };
     })

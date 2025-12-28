@@ -4,8 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ExecutionReport, ExecutionPhase } from '../orchestrator/types.js';
+import type {
+  ExecutionReport,
+  ExecutionPhase,
+  ExecutionPlan,
+} from '../orchestrator/types.js';
 import type { HybridModeManager } from './hybrid-mode-manager.js';
+import type { SpecializedAgent } from '../agents/specialized/types.js';
+import { AGENT_REGISTRY } from '../agents/specialized/agent-registry.js';
 
 /**
  * Result of the /agentic command
@@ -18,7 +24,7 @@ export interface AgenticCommandResult {
 
 /**
  * Handles the /agentic slash command
- * 
+ *
  * Usage:
  *   /agentic <task>     - Execute a task using multi-agent orchestration
  *   /agentic status     - Show agentic mode status and stats
@@ -39,11 +45,11 @@ export class AgenticCommand {
     callbacks?: {
       onOutput?: (message: string) => void;
       onPhaseChange?: (phase: ExecutionPhase) => void;
-      onApprovalRequired?: (plan: any) => Promise<boolean>;
+      onApprovalRequired?: (plan: ExecutionPlan) => Promise<boolean>;
     },
   ): Promise<AgenticCommandResult> {
     const trimmedArgs = args.trim();
-    const [subcommand, ...rest] = trimmedArgs.split(/\s+/);
+    const [subcommand, ..._rest] = trimmedArgs.split(/\s+/);
 
     switch (subcommand?.toLowerCase()) {
       case 'status':
@@ -68,11 +74,7 @@ export class AgenticCommand {
 
       default:
         // Treat as a task to execute
-        return this.handleExecuteTask(
-          trimmedArgs,
-          workingDirectory,
-          callbacks,
-        );
+        return this.handleExecuteTask(trimmedArgs, workingDirectory, callbacks);
     }
   }
 
@@ -83,7 +85,7 @@ export class AgenticCommand {
 
     let message = `## Agentic Mode Status\n\n`;
     message += `**Enabled:** ${enabled ? 'Yes' : 'No'}\n`;
-    
+
     if (phase) {
       message += `**Current Phase:** ${phase}\n`;
     }
@@ -97,7 +99,9 @@ export class AgenticCommand {
 
       if (Object.keys(stats.agentBreakdown).length > 0) {
         message += `\n### Agent Breakdown\n`;
-        for (const [agentId, agentStats] of Object.entries(stats.agentBreakdown)) {
+        for (const [_agentId, agentStats] of Object.entries(
+          stats.agentBreakdown,
+        )) {
           message += `- **${agentStats.agentName}**: ${agentStats.taskCount} tasks, ${agentStats.tokenCount} tokens\n`;
         }
       }
@@ -110,7 +114,8 @@ export class AgenticCommand {
     this.manager.enable();
     return {
       success: true,
-      message: 'Agentic mode enabled. Tasks will now use multi-agent orchestration.',
+      message:
+        'Agentic mode enabled. Tasks will now use multi-agent orchestration.',
     };
   }
 
@@ -123,13 +128,10 @@ export class AgenticCommand {
   }
 
   private handleListAgents(): AgenticCommandResult {
-    // Import agent registry
-    const { AGENT_REGISTRY } = require('../agents/specialized/agent-registry.js');
-    
     let message = `## Available Specialized Agents\n\n`;
-    
+
     // Group by domain
-    const byDomain: Record<string, any[]> = {};
+    const byDomain: Record<string, SpecializedAgent[]> = {};
     for (const agent of AGENT_REGISTRY) {
       if (!byDomain[agent.domain]) {
         byDomain[agent.domain] = [];
@@ -149,8 +151,6 @@ export class AgenticCommand {
   }
 
   private handleTrustStatus(): AgenticCommandResult {
-    const { AGENT_REGISTRY } = require('../agents/specialized/agent-registry.js');
-    
     let message = `## Agent Trust Levels\n\n`;
     message += `| Agent | Trust Level | Requires Approval |\n`;
     message += `|-------|-------------|-------------------|\n`;
@@ -207,7 +207,7 @@ This would activate: auth-security, api-designer, database-architect, unit-test-
     callbacks?: {
       onOutput?: (message: string) => void;
       onPhaseChange?: (phase: ExecutionPhase) => void;
-      onApprovalRequired?: (plan: any) => Promise<boolean>;
+      onApprovalRequired?: (plan: ExecutionPlan) => Promise<boolean>;
     },
   ): Promise<AgenticCommandResult> {
     if (!this.manager.isEnabled()) {
@@ -225,16 +225,16 @@ This would activate: auth-security, api-designer, database-architect, unit-test-
         onApprovalRequired: callbacks?.onApprovalRequired,
       });
 
-      let message = this.formatReport(report);
+      const message = this.formatReport(report);
 
       return {
         success: report.success,
         message,
         report,
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         success: false,
         message: `Agentic execution failed: ${errorMessage}`,
@@ -244,7 +244,7 @@ This would activate: auth-security, api-designer, database-architect, unit-test-
 
   private formatReport(report: ExecutionReport): string {
     let message = `## Agentic Execution Report\n\n`;
-    
+
     message += `**Task:** ${report.task}\n`;
     message += `**Status:** ${report.success ? 'Success' : 'Failed'}\n`;
     message += `**Duration:** ${report.totalDurationMs}ms\n\n`;
@@ -254,30 +254,37 @@ This would activate: auth-security, api-designer, database-architect, unit-test-
     }
 
     message += `### Agent Executions\n\n`;
-    for (const execution of report.agentExecutions) {
+    const executions = report.agentExecutions || [];
+    for (const execution of executions) {
       const status = execution.success ? '✓' : '✗';
       message += `${status} **${execution.agentName}** (${execution.durationMs}ms)\n`;
-      
-      if (execution.toolsUsed.length > 0) {
+
+      if (execution.toolsUsed && execution.toolsUsed.length > 0) {
         message += `  - Tools: ${execution.toolsUsed.join(', ')}\n`;
       }
-      
-      if (execution.filesModified.length > 0) {
+
+      if (execution.filesModified && execution.filesModified.length > 0) {
         message += `  - Modified: ${execution.filesModified.join(', ')}\n`;
       }
-      
+
       if (execution.error) {
         message += `  - Error: ${execution.error}\n`;
       }
     }
 
-    if (report.qualityGateResults.length > 0) {
+    const gateResults = report.qualityGateResults || [];
+    if (gateResults.length > 0) {
       message += `\n### Quality Gates\n\n`;
-      for (const gate of report.qualityGateResults) {
-        const status = gate.passed ? '✓' : '✗';
-        message += `${status} **${gate.name}**`;
-        if (gate.message) {
-          message += ` - ${gate.message}`;
+      for (const gate of gateResults) {
+        const gateResult = gate as {
+          passed: boolean;
+          name: string;
+          message?: string;
+        };
+        const status = gateResult.passed ? '✓' : '✗';
+        message += `${status} **${gateResult.name}**`;
+        if (gateResult.message) {
+          message += ` - ${gateResult.message}`;
         }
         message += `\n`;
       }

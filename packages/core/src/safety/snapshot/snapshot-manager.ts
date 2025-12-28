@@ -1,12 +1,18 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Snapshot Manager
  * Creates and manages file snapshots for safe rollback
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as crypto from 'crypto';
-import {
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+import type {
   Snapshot,
   SnapshotFile,
   SnapshotMetadata,
@@ -58,7 +64,7 @@ export class SnapshotManager {
   async createSnapshot(
     filePaths: string[],
     label: string,
-    metadata: SnapshotMetadata
+    metadata: SnapshotMetadata,
   ): Promise<Snapshot> {
     const id = this.generateId();
     const timestamp = new Date().toISOString();
@@ -80,9 +86,11 @@ export class SnapshotManager {
       }
 
       const stats = fs.statSync(absolutePath);
-      
+
       if (stats.size > this.options.maxFileSize) {
-        console.log(`[Snapshot] File too large, skipping: ${filePath} (${stats.size} bytes)`);
+        console.log(
+          `[Snapshot] File too large, skipping: ${filePath} (${stats.size} bytes)`,
+        );
         continue;
       }
 
@@ -113,7 +121,9 @@ export class SnapshotManager {
     const snapshotPath = path.join(this.snapshotDir, `${id}.json`);
     fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2));
 
-    console.log(`[Snapshot] Created: ${id} - "${label}" (${files.length} files)`);
+    console.log(
+      `[Snapshot] Created: ${id} - "${label}" (${files.length} files)`,
+    );
 
     // Cleanup old snapshots
     await this.cleanupOldSnapshots();
@@ -129,12 +139,13 @@ export class SnapshotManager {
       return [];
     }
 
-    const files = fs.readdirSync(this.snapshotDir)
-      .filter(f => f.endsWith('.json'))
+    const files = fs
+      .readdirSync(this.snapshotDir)
+      .filter((f) => f.endsWith('.json'))
       .sort()
       .reverse();
 
-    return files.map(f => {
+    return files.map((f) => {
       const content = fs.readFileSync(path.join(this.snapshotDir, f), 'utf-8');
       return JSON.parse(content) as Snapshot;
     });
@@ -145,7 +156,7 @@ export class SnapshotManager {
    */
   getSnapshot(snapshotId: string): Snapshot | null {
     const snapshotPath = path.join(this.snapshotDir, `${snapshotId}.json`);
-    
+
     if (!fs.existsSync(snapshotPath)) {
       return null;
     }
@@ -189,7 +200,10 @@ export class SnapshotManager {
         });
         summary.unchanged++;
       } else {
-        const { added, removed } = this.countLineDiff(sf.content, currentContent);
+        const { added, removed } = this.countLineDiff(
+          sf.content,
+          currentContent,
+        );
         files.push({
           path: sf.path,
           status: 'modified',
@@ -214,7 +228,7 @@ export class SnapshotManager {
    */
   async restoreSnapshot(
     snapshotId: string,
-    options: RestoreOptions = {}
+    options: RestoreOptions = {},
   ): Promise<RestoreResult> {
     const snapshot = this.getSnapshot(snapshotId);
     if (!snapshot) {
@@ -230,8 +244,9 @@ export class SnapshotManager {
 
     // Create backup before restore if requested
     if (options.createBackup) {
-      const filesToBackup = snapshot.files.map(f => f.path);
-      const backupLabel = options.backupLabel || `Pre-restore backup for ${snapshotId}`;
+      const filesToBackup = snapshot.files.map((f) => f.path);
+      const backupLabel =
+        options.backupLabel || `Pre-restore backup for ${snapshotId}`;
       const backup = await this.createSnapshot(filesToBackup, backupLabel, {
         agentId: 'snapshot-manager',
         taskDescription: `Backup before restoring ${snapshotId}`,
@@ -245,7 +260,7 @@ export class SnapshotManager {
     for (const sf of snapshot.files) {
       // Filter if specific files requested
       if (options.files && options.files.length > 0) {
-        if (!options.files.some(f => sf.path.includes(f))) {
+        if (!options.files.some((f) => sf.path.includes(f))) {
           result.skipped.push(sf.path);
           continue;
         }
@@ -280,8 +295,8 @@ export class SnapshotManager {
     const action = options.dryRun ? 'Would restore' : 'Restored';
     console.log(
       `[Snapshot] ${action} ${result.restored.length} files, ` +
-      `skipped ${result.skipped.length}, ` +
-      `failed ${result.failed.length}`
+        `skipped ${result.skipped.length}, ` +
+        `failed ${result.failed.length}`,
     );
 
     return result;
@@ -292,7 +307,7 @@ export class SnapshotManager {
    */
   deleteSnapshot(snapshotId: string): boolean {
     const snapshotPath = path.join(this.snapshotDir, `${snapshotId}.json`);
-    
+
     if (!fs.existsSync(snapshotPath)) {
       return false;
     }
@@ -300,6 +315,13 @@ export class SnapshotManager {
     fs.unlinkSync(snapshotPath);
     console.log(`[Snapshot] Deleted: ${snapshotId}`);
     return true;
+  }
+
+  /**
+   * Cleanup all snapshots (public method for external access)
+   */
+  async cleanup(): Promise<void> {
+    await this.cleanupOldSnapshots();
   }
 
   /**
@@ -313,10 +335,10 @@ export class SnapshotManager {
     newestSnapshot?: string;
   } {
     const snapshots = this.listSnapshots();
-    
+
     let totalFiles = 0;
     let totalSize = 0;
-    
+
     for (const snapshot of snapshots) {
       totalFiles += snapshot.files.length;
       totalSize += snapshot.files.reduce((sum, f) => sum + f.size, 0);
@@ -341,7 +363,11 @@ export class SnapshotManager {
   }
 
   private hash(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+    return crypto
+      .createHash('sha256')
+      .update(content)
+      .digest('hex')
+      .slice(0, 16);
   }
 
   private shouldExclude(filePath: string): boolean {
@@ -355,7 +381,7 @@ export class SnapshotManager {
         .replace(/\*\*/g, '.*')
         .replace(/\*/g, '[^/]*')
         .replace(/\./g, '\\.');
-      
+
       if (new RegExp(`^${regexPattern}$`).test(relativePath)) {
         return true;
       }
@@ -364,14 +390,17 @@ export class SnapshotManager {
     return false;
   }
 
-  private countLineDiff(oldContent: string, newContent: string): { added: number; removed: number } {
+  private countLineDiff(
+    oldContent: string,
+    newContent: string,
+  ): { added: number; removed: number } {
     const oldLines = oldContent.split('\n');
     const newLines = newContent.split('\n');
-    
+
     // Simple line count diff (not a real diff algorithm)
     const added = Math.max(0, newLines.length - oldLines.length);
     const removed = Math.max(0, oldLines.length - newLines.length);
-    
+
     return { added, removed };
   }
 
@@ -383,10 +412,10 @@ export class SnapshotManager {
 
   private async cleanupOldSnapshots(): Promise<void> {
     const snapshots = this.listSnapshots();
-    
+
     if (snapshots.length > this.options.maxSnapshots) {
       const toDelete = snapshots.slice(this.options.maxSnapshots);
-      
+
       for (const snapshot of toDelete) {
         this.deleteSnapshot(snapshot.id);
       }

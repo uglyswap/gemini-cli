@@ -61,6 +61,8 @@ export type ContentGeneratorConfig = {
   vertexai?: boolean;
   authType?: AuthType;
   proxy?: string;
+  /** Model name (used for logging and user agent) */
+  model?: string;
   /** Base URL for OpenAI-compatible providers */
   openAICompatibleBaseUrl?: string;
   /** Model name override for OpenAI-compatible providers */

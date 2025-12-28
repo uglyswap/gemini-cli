@@ -1,4 +1,10 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Trust Cascade System Types
  * Implements dynamic trust levels (L0-L4) for agent supervision
  * Inspired by Agentic Dev System's Trust Cascade protocol
@@ -101,20 +107,22 @@ export interface TrustPrivileges {
   /** Maximum retry attempts on failure */
   maxRetries: number;
   /** Allowed file operations */
-  allowedOperations: ('read' | 'write' | 'delete' | 'execute')[];
+  allowedOperations: Array<'read' | 'write' | 'delete' | 'execute'>;
   /** Maximum files modifiable in single operation */
   maxFilesPerOperation: number;
+  /** Whether approval is required */
+  requiresApproval?: boolean;
 }
 
 /**
  * Supervision mode for quality checking
  */
-export type SupervisionMode = 
-  | 'paranoid'   // Every action reviewed
-  | 'enhanced'   // Extra checks on all operations
-  | 'full'       // Standard full quality checks
-  | 'standard'   // Normal quality checks
-  | 'sampling';  // Random sampling (1 in N)
+export type SupervisionMode =
+  | 'paranoid' // Every action reviewed
+  | 'enhanced' // Extra checks on all operations
+  | 'full' // Standard full quality checks
+  | 'standard' // Normal quality checks
+  | 'sampling'; // Random sampling (1 in N)
 
 /**
  * Complete configuration for a trust level
@@ -182,7 +190,7 @@ export interface TrustEngineOptions {
   /** Maximum executions to keep in history */
   maxHistorySize?: number;
   /** Custom level configurations */
-  levelConfigs?: Partial<TrustLevelConfig>[];
+  levelConfigs?: Array<Partial<TrustLevelConfig>>;
   /** Enable auto-save after each update */
   autoSave?: boolean;
   /** Callback when trust level changes */

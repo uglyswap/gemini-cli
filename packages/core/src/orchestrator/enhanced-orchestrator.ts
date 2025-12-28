@@ -19,7 +19,6 @@ import { AgentSelector, getAgentById } from '../agents/specialized/index.js';
 import type { SpecializedAgent } from '../agents/specialized/types.js';
 import { SnapshotManager } from '../safety/snapshot/snapshot-manager.js';
 import { GateRunner } from '../safety/quality-gates/gate-runner.js';
-import { BUILT_IN_GATES } from '../safety/quality-gates/built-in-gates.js';
 import { AgentSessionManager } from '../agents/session/agent-session-manager.js';
 import type { AgentTaskResult } from '../agents/session/types.js';
 import type { Config } from '../config/config.js';
@@ -27,7 +26,7 @@ import type { ContentGenerator } from '../core/contentGenerator.js';
 
 /**
  * Enhanced Agent Orchestrator
- * 
+ *
  * Implements the 6-phase execution workflow:
  * 1. INIT - Select agents based on task analysis
  * 2. EXPLAIN - Generate execution plan with trust-based privileges
@@ -55,53 +54,48 @@ export class EnhancedAgentOrchestrator {
   ) {
     this.config = orchestratorConfig;
 
+    const workingDir =
+      orchestratorConfig.workingDirectory || orchestratorConfig.projectRoot;
+
     // Initialize trust engine
-    this.trustEngine = new TrustCascadeEngine(
-      orchestratorConfig.workingDirectory,
-    );
+    this.trustEngine = new TrustCascadeEngine(workingDir);
 
     // Initialize agent selector
     this.agentSelector = new AgentSelector();
 
     // Initialize snapshot manager
-    this.snapshotManager = new SnapshotManager({
-      workingDirectory: orchestratorConfig.workingDirectory,
+    this.snapshotManager = new SnapshotManager(workingDir, {
       maxSnapshots: 10,
       excludePatterns: ['node_modules', '.git', 'dist', 'build', '.gemini'],
     });
 
-    // Initialize quality gate runner with configured gates
-    const gates = (orchestratorConfig.qualityGates || ['typescript', 'eslint'])
-      .map(name => BUILT_IN_GATES.find(g => g.name === name))
-      .filter((g): g is NonNullable<typeof g> => g !== undefined);
-
-    this.gateRunner = new GateRunner(
-      gates,
-      orchestratorConfig.workingDirectory,
-    );
+    // Initialize quality gate runner
+    // Note: Gate selection from config is handled internally by GateRunner
+    this.gateRunner = new GateRunner({
+      verbose: orchestratorConfig.verbose,
+    });
 
     // Initialize session manager for isolated agent contexts
-    this.sessionManager = new AgentSessionManager(
-      cliConfig,
-      contentGenerator,
-      {
-        workingDirectory: orchestratorConfig.workingDirectory,
-        maxConcurrentSessions: 5,
-        reuseAgentSessions: true,
-      },
-    );
+    this.sessionManager = new AgentSessionManager(cliConfig, contentGenerator, {
+      workingDirectory: workingDir,
+      maxConcurrentSessions: 5,
+      reuseAgentSessions: true,
+    });
 
     // Subscribe to session events
     this.sessionManager.onEvent((event) => {
       if (event.type === 'task_completed') {
-        const agentId = this.sessionManager.getSession(event.sessionId)?.getAgent().id;
+        const agentId = this.sessionManager
+          .getSession(event.sessionId)
+          ?.getAgent().id;
         if (agentId) {
           // Record execution in trust engine
-          this.trustEngine.recordExecution(
-            agentId,
-            event.result.success,
-            event.result.error,
-          );
+          this.trustEngine.recordExecution(agentId, {
+            success: event.result.success,
+            qualityScore: event.result.success ? 80 : 30,
+            durationMs: event.result.durationMs,
+            errorDetails: event.result.error,
+          });
         }
       }
     });
@@ -118,7 +112,7 @@ export class EnhancedAgentOrchestrator {
     },
   ): Promise<ExecutionReport> {
     const startTime = Date.now();
-    
+
     if (options?.onPhaseChange) {
       this.phaseCallbacks.push(options.onPhaseChange);
     }
@@ -133,8 +127,16 @@ export class EnhancedAgentOrchestrator {
     try {
       // Phase 1: INIT - Select agents
       await this.setPhase('INIT');
-      const selectedAgents = this.agentSelector.selectAgents(task);
-      const orderedAgents = this.agentSelector.getExecutionOrder(selectedAgents);
+      const selectionResult = this.agentSelector.selectAgents(task);
+      const orderedAgentsList = this.agentSelector.getExecutionOrder(
+        selectionResult.agents,
+      );
+
+      // Convert to the format expected by generatePlan
+      const orderedAgents = orderedAgentsList.map((agent) => ({
+        agent,
+        score: selectionResult.scores.get(agent.id) || 0,
+      }));
 
       // Phase 2: EXPLAIN - Generate execution plan
       await this.setPhase('EXPLAIN');
@@ -159,9 +161,16 @@ export class EnhancedAgentOrchestrator {
       // Phase 3: SNAPSHOT - Create safety snapshot
       await this.setPhase('SNAPSHOT');
       if (this.config.enableSnapshots !== false) {
-        snapshotId = await this.snapshotManager.createSnapshot(
+        const snapshot = await this.snapshotManager.createSnapshot(
+          [], // No specific files, will snapshot working directory
           `Before task: ${task.substring(0, 50)}...`,
+          {
+            agentId: 'orchestrator',
+            taskDescription: task,
+            trustLevel: TrustLevel.L2_GUIDED,
+          },
         );
+        snapshotId = snapshot.id;
       }
 
       // Phase 4: EXECUTE - Run agents
@@ -170,11 +179,7 @@ export class EnhancedAgentOrchestrator {
         const agent = getAgentById(agentInfo.agent.id);
         if (!agent) continue;
 
-        const execution = await this.executeAgent(
-          agent,
-          task,
-          plan,
-        );
+        const execution = await this.executeAgent(agent, task, plan);
         agentExecutions.push(execution);
 
         // Stop on critical failure if not in autonomous mode
@@ -185,12 +190,28 @@ export class EnhancedAgentOrchestrator {
 
       // Phase 5: VALIDATE - Run quality gates
       await this.setPhase('VALIDATE');
-      const gateResults = await this.gateRunner.runPostGates();
-      const allGatesPassed = gateResults.every(r => r.passed);
+      const gateWorkingDir =
+        this.config.workingDirectory || this.config.projectRoot;
+      const gateContext = {
+        projectRoot: gateWorkingDir,
+        modifiedFiles: agentExecutions.flatMap((e) => e.filesModified || []),
+        agentId: 'orchestrator',
+        taskDescription: task,
+        trustLevel: TrustLevel.L2_GUIDED,
+        options: {},
+      };
+      const gateResults = await this.gateRunner.runPostGates(gateContext);
+      const allGatesPassed = gateResults.passed;
 
       // Rollback if validation failed and we have a snapshot
-      if (!allGatesPassed && snapshotId && this.config.enableSnapshots !== false) {
-        const shouldRollback = await this.requestRollbackApproval(gateResults);
+      if (
+        !allGatesPassed &&
+        snapshotId &&
+        this.config.enableSnapshots !== false
+      ) {
+        const shouldRollback = await this.requestRollbackApproval(
+          gateResults.gates,
+        );
         if (shouldRollback) {
           await this.snapshotManager.restoreSnapshot(snapshotId);
         }
@@ -198,7 +219,8 @@ export class EnhancedAgentOrchestrator {
 
       // Phase 6: REPORT - Generate execution report
       await this.setPhase('REPORT');
-      const overallSuccess = agentExecutions.every(e => e.success) && allGatesPassed;
+      const overallSuccess =
+        agentExecutions.every((e) => e.success) && allGatesPassed;
 
       return this.createReport(
         task,
@@ -207,13 +229,13 @@ export class EnhancedAgentOrchestrator {
         overallSuccess,
         undefined,
         startTime,
-        gateResults,
+        gateResults.gates,
         snapshotId,
       );
-
     } catch (error) {
       // Handle unexpected errors
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       // Attempt rollback on error
       if (snapshotId && this.config.enableSnapshots !== false) {
@@ -235,10 +257,10 @@ export class EnhancedAgentOrchestrator {
     } finally {
       // Cleanup
       this.phaseCallbacks = this.phaseCallbacks.filter(
-        cb => cb !== options?.onPhaseChange,
+        (cb) => cb !== options?.onPhaseChange,
       );
       this.approvalCallbacks = this.approvalCallbacks.filter(
-        cb => cb !== options?.onApprovalRequired,
+        (cb) => cb !== options?.onApprovalRequired,
       );
     }
   }
@@ -293,7 +315,9 @@ export class EnhancedAgentOrchestrator {
     agents: Array<{ agent: SpecializedAgent; score: number }>,
   ): Promise<ExecutionPlan> {
     const steps = agents.map((agentInfo, index) => {
-      const trustLevel = this.trustEngine.calculateTrustLevel(agentInfo.agent.id);
+      const trustLevel = this.trustEngine.calculateTrustLevel(
+        agentInfo.agent.id,
+      );
       const privileges = this.trustEngine.getPrivileges(agentInfo.agent.id);
 
       return {
@@ -323,11 +347,14 @@ export class EnhancedAgentOrchestrator {
     agents: Array<{ agent: SpecializedAgent; score: number }>,
   ): boolean {
     const threshold = this.config.requireApprovalAbove || TrustLevel.L2_GUIDED;
-    
-    return agents.some(agentInfo => {
-      const trustLevel = this.trustEngine.calculateTrustLevel(agentInfo.agent.id);
+
+    return agents.some((agentInfo) => {
+      const trustLevel = this.trustEngine.calculateTrustLevel(
+        agentInfo.agent.id,
+      );
       const privileges = this.trustEngine.getPrivileges(agentInfo.agent.id);
-      return privileges.requiresApproval;
+      // Require approval if privileges say so, or if trust level is below threshold
+      return privileges.requiresApproval || trustLevel < threshold;
     });
   }
 
@@ -352,7 +379,12 @@ export class EnhancedAgentOrchestrator {
    * Request rollback approval after validation failure
    */
   private async requestRollbackApproval(
-    gateResults: Array<{ name: string; passed: boolean; message?: string }>,
+    gateResults: Array<{
+      gateId: string;
+      gateName: string;
+      passed: boolean;
+      message?: string;
+    }>,
   ): Promise<boolean> {
     // In automated mode, auto-rollback on failure
     if (this.approvalCallbacks.length === 0) {
@@ -360,18 +392,20 @@ export class EnhancedAgentOrchestrator {
     }
 
     // Otherwise, ask for approval
-    const failedGates = gateResults.filter(r => !r.passed);
+    const failedGates = gateResults.filter((r) => !r.passed);
     const rollbackPlan: ExecutionPlan = {
       task: 'Rollback due to validation failures',
-      steps: [{
-        order: 1,
-        agentId: 'system',
-        agentName: 'System Rollback',
-        description: `Failed gates: ${failedGates.map(g => g.name).join(', ')}`,
-        trustLevel: TrustLevel.L4_AUTONOMOUS,
-        privileges: this.trustEngine.getPrivileges('system'),
-        estimatedComplexity: 'simple' as const,
-      }],
+      steps: [
+        {
+          order: 1,
+          agentId: 'system',
+          agentName: 'System Rollback',
+          description: `Failed gates: ${failedGates.map((g) => g.gateName).join(', ')}`,
+          trustLevel: TrustLevel.L4_AUTONOMOUS,
+          privileges: this.trustEngine.getPrivileges('system'),
+          estimatedComplexity: 'simple' as const,
+        },
+      ],
       totalAgents: 1,
       estimatedComplexity: 'simple',
       createdAt: new Date(),
@@ -390,17 +424,14 @@ export class EnhancedAgentOrchestrator {
   ): Promise<AgentExecution> {
     const startTime = Date.now();
     const trustLevel = this.trustEngine.calculateTrustLevel(agent.id);
-    const privileges = this.trustEngine.getPrivileges(agent.id);
 
     // Build agent-specific task prompt
     const agentTask = this.buildAgentTask(agent, task, plan);
 
     try {
       // Execute via session manager (isolated context)
-      const result: AgentTaskResult = await this.sessionManager.executeAgentTask(
-        agent,
-        agentTask,
-      );
+      const result: AgentTaskResult =
+        await this.sessionManager.executeAgentTask(agent, agentTask);
 
       return {
         agentId: agent.id,
@@ -410,13 +441,13 @@ export class EnhancedAgentOrchestrator {
         error: result.error,
         durationMs: result.durationMs,
         trustLevel,
-        toolsUsed: result.toolCalls?.map(tc => tc.name) || [],
+        toolsUsed: result.toolCalls?.map((tc) => tc.name) || [],
         filesModified: result.modifiedFiles || [],
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
       return {
         agentId: agent.id,
         agentName: agent.name,
@@ -439,8 +470,8 @@ export class EnhancedAgentOrchestrator {
     task: string,
     plan: ExecutionPlan,
   ): string {
-    const stepInfo = plan.steps.find(s => s.agentId === agent.id);
-    
+    const stepInfo = plan.steps?.find((s) => s.agentId === agent.id);
+
     return `
 # Task Assignment for ${agent.name}
 
@@ -456,7 +487,7 @@ As the ${agent.name}, focus on the ${agent.domain} aspects of this task.
 - Complexity: ${stepInfo?.estimatedComplexity || 'unknown'}
 
 ## Your Responsibilities
-${agent.qualityChecks.map(check => `- ${check}`).join('\n')}
+${agent.qualityChecks.map((check) => `- ${check}`).join('\n')}
 
 ## Instructions
 1. Analyze the task from your specialized perspective
@@ -472,12 +503,12 @@ Begin your analysis and execution now.
    * Determine if execution should stop on agent failure
    */
   private shouldStopOnFailure(agent: SpecializedAgent): boolean {
-    const privileges = this.trustEngine.getPrivileges(agent.id);
-    
     // Stop on failure for supervised/guided agents
     const trustLevel = this.trustEngine.calculateTrustLevel(agent.id);
-    return trustLevel === TrustLevel.L1_SUPERVISED || 
-           trustLevel === TrustLevel.L2_GUIDED;
+    return (
+      trustLevel === TrustLevel.L1_SUPERVISED ||
+      trustLevel === TrustLevel.L2_GUIDED
+    );
   }
 
   /**
@@ -490,7 +521,12 @@ Begin your analysis and execution now.
     success: boolean,
     error: string | undefined,
     startTime: number,
-    gateResults?: Array<{ name: string; passed: boolean; message?: string }>,
+    gateResults?: Array<{
+      gateId: string;
+      gateName: string;
+      passed: boolean;
+      message?: string;
+    }>,
     snapshotId?: string,
   ): ExecutionReport {
     return {

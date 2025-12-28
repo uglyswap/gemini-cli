@@ -1,4 +1,10 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Specialized Agent Types
  * Defines agent specializations for the multi-agent orchestration system
  */
@@ -6,7 +12,7 @@
 /**
  * Domain categories for agent specialization
  */
-export type AgentDomain = 
+export type AgentDomain =
   | 'frontend'
   | 'backend'
   | 'database'
@@ -20,7 +26,7 @@ export type AgentDomain =
 /**
  * Model tier for cost/capability tradeoffs
  */
-export type ModelTier = 'fast' | 'balanced' | 'powerful';
+export type ModelTier = 'flash' | 'pro' | 'ultra';
 
 /**
  * Task complexity levels
@@ -30,7 +36,7 @@ export type TaskComplexity = 'simple' | 'moderate' | 'complex';
 /**
  * Quality check types
  */
-export type QualityCheck = 
+export type QualityCheck =
   | 'typescript'
   | 'eslint'
   | 'prettier'
@@ -55,7 +61,7 @@ export type QualityCheck =
 /**
  * Tool identifiers available to agents
  */
-export type ToolId = 
+export type ToolId =
   | 'readFile'
   | 'writeFile'
   | 'editFile'
@@ -94,6 +100,11 @@ export interface AgentSpecialization {
   /** Priority weight for agent selection (higher = more likely) */
   priority: number;
 }
+
+/**
+ * Alias for AgentSpecialization (for backward compatibility)
+ */
+export type SpecializedAgent = AgentSpecialization;
 
 /**
  * Agent selection result

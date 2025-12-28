@@ -7,7 +7,13 @@
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import { EnhancedAgentOrchestrator } from '../orchestrator/enhanced-orchestrator.js';
-import type { ExecutionReport, ExecutionPhase, OrchestratorConfig } from '../orchestrator/types.js';
+import { DEFAULT_ORCHESTRATOR_CONFIG } from '../orchestrator/types.js';
+import type {
+  ExecutionReport,
+  ExecutionPhase,
+  ExecutionPlan,
+  OrchestratorConfig,
+} from '../orchestrator/types.js';
 import type { TrustLevel } from '../trust/types.js';
 
 /**
@@ -85,7 +91,7 @@ export class HybridModeManager {
   disable(): void {
     this.config.enabled = false;
     if (this.orchestrator) {
-      this.orchestrator.cleanup();
+      void this.orchestrator.cleanup();
       this.orchestrator = null;
     }
   }
@@ -99,8 +105,10 @@ export class HybridModeManager {
     }
 
     const orchestratorConfig: OrchestratorConfig = {
+      ...DEFAULT_ORCHESTRATOR_CONFIG,
+      projectRoot: workingDirectory,
       workingDirectory,
-      enableSnapshots: this.config.enableSnapshots,
+      enableSnapshots: this.config.enableSnapshots ?? true,
       qualityGates: this.config.qualityGates,
       requireApprovalAbove: this.config.requireApprovalAbove,
     };
@@ -122,11 +130,13 @@ export class HybridModeManager {
     workingDirectory: string,
     options?: {
       onPhaseChange?: (phase: ExecutionPhase) => void | Promise<void>;
-      onApprovalRequired?: (plan: any) => Promise<boolean>;
+      onApprovalRequired?: (plan: ExecutionPlan) => Promise<boolean>;
     },
   ): Promise<ExecutionReport> {
     if (!this.config.enabled) {
-      throw new Error('Agentic mode is not enabled. Enable it first with enable() or set enabled: true in config.');
+      throw new Error(
+        'Agentic mode is not enabled. Enable it first with enable() or set enabled: true in config.',
+      );
     }
 
     await this.initialize(workingDirectory);
@@ -218,6 +228,9 @@ export function createHybridModeManager(
   contentGenerator: ContentGenerator,
   geminiMdConfig?: Record<string, unknown>,
 ): HybridModeManager {
-  const hybridConfig = parseHybridConfig(geminiMdConfig, process.env as Record<string, string>);
+  const hybridConfig = parseHybridConfig(
+    geminiMdConfig,
+    process.env as Record<string, string>,
+  );
   return new HybridModeManager(cliConfig, contentGenerator, hybridConfig);
 }

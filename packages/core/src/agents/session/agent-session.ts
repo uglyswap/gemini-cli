@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Content, Tool, Part } from '@google/genai';
+import type { Content, Tool } from '@google/genai';
 import { randomUUID } from 'node:crypto';
 import type {
   AgentSessionConfig,
@@ -29,7 +29,7 @@ export class AgentSession {
   private readonly history: Content[] = [];
   private readonly tools: Tool[];
   private readonly eventCallbacks: AgentSessionEventCallback[] = [];
-  
+
   private state: AgentSessionState;
   private isActive = true;
 
@@ -42,7 +42,7 @@ export class AgentSession {
     this.agent = sessionConfig.agent;
     this.workingDirectory = sessionConfig.workingDirectory;
     this.tools = sessionConfig.tools || this.buildAgentTools();
-    
+
     // Initialize with any provided context
     if (sessionConfig.initialContext) {
       this.history.push(...sessionConfig.initialContext);
@@ -58,13 +58,20 @@ export class AgentSession {
       isActive: true,
     };
 
-    this.emit({ type: 'session_created', sessionId: this.sessionId, agentId: this.agent.id });
+    this.emit({
+      type: 'session_created',
+      sessionId: this.sessionId,
+      agentId: this.agent.id,
+    });
   }
 
   /**
    * Execute a task within this agent's isolated context
    */
-  async executeTask(task: string, abortSignal?: AbortSignal): Promise<AgentTaskResult> {
+  async executeTask(
+    task: string,
+    abortSignal?: AbortSignal,
+  ): Promise<AgentTaskResult> {
     if (!this.isActive) {
       return {
         success: false,
@@ -128,18 +135,21 @@ export class AgentSession {
         output: text,
         toolCalls,
         durationMs: Date.now() - startTime,
-        tokenUsage: response.usageMetadata ? {
-          promptTokens: response.usageMetadata.promptTokenCount || 0,
-          completionTokens: response.usageMetadata.candidatesTokenCount || 0,
-          totalTokens: response.usageMetadata.totalTokenCount || 0,
-        } : undefined,
+        tokenUsage: response.usageMetadata
+          ? {
+              promptTokens: response.usageMetadata.promptTokenCount || 0,
+              completionTokens:
+                response.usageMetadata.candidatesTokenCount || 0,
+              totalTokens: response.usageMetadata.totalTokenCount || 0,
+            }
+          : undefined,
       };
 
       this.emit({ type: 'task_completed', sessionId: this.sessionId, result });
       return result;
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       const result: AgentTaskResult = {
         success: false,
         output: '',
@@ -202,7 +212,7 @@ Your expertise and responsibilities:
 ${this.agent.systemPrompt}
 
 Quality Expectations:
-${this.agent.qualityChecks.map(check => `- ${check}`).join('\n')}
+${this.agent.qualityChecks.map((check) => `- ${check}`).join('\n')}
 
 IMPORTANT:
 - Focus ONLY on tasks within your domain of expertise
@@ -226,7 +236,10 @@ IMPORTANT:
   /**
    * Parse the model response to extract text and tool calls
    */
-  private parseResponse(content?: Content): { text: string; toolCalls: AgentToolCall[] } {
+  private parseResponse(content?: Content): {
+    text: string;
+    toolCalls: AgentToolCall[];
+  } {
     if (!content?.parts) {
       return { text: '', toolCalls: [] };
     }

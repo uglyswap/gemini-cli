@@ -1,10 +1,16 @@
 /**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
  * Quality Gate Runner
  * Executes quality gates before and after agent operations
  */
 
-import { spawn } from 'child_process';
-import {
+import { spawn } from 'node:child_process';
+import type {
   QualityGate,
   GateContext,
   GateCheckResult,
@@ -14,7 +20,7 @@ import {
   GateIssue,
 } from './types.js';
 import { BUILT_IN_GATES } from './built-in-gates.js';
-import { AgentDomain } from '../../agents/specialized/types.js';
+import type { AgentDomain } from '../../agents/specialized/types.js';
 
 const DEFAULT_OPTIONS: Required<GateRunnerOptions> = {
   continueOnFailure: true,
@@ -34,7 +40,7 @@ export class GateRunner {
 
   constructor(options: GateRunnerOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
-    
+
     // Register built-in gates
     for (const gate of BUILT_IN_GATES) {
       this.registerGate(gate);
@@ -69,7 +75,7 @@ export class GateRunner {
    * Get gates applicable to a domain
    */
   getGatesForDomain(domain: AgentDomain): QualityGate[] {
-    return this.getGates().filter(gate => {
+    return this.getGates().filter((gate) => {
       if (gate.applicableDomains === 'all') return true;
       return gate.applicableDomains.includes(domain);
     });
@@ -81,29 +87,27 @@ export class GateRunner {
   async runGates(
     timing: GateTiming,
     context: GateContext,
-    domain?: AgentDomain
+    domain?: AgentDomain,
   ): Promise<GateExecutionResult> {
     const startTime = Date.now();
     const results: GateCheckResult[] = [];
     const blockingIssues: GateIssue[] = [];
 
     // Get applicable gates
-    let gates = domain
-      ? this.getGatesForDomain(domain)
-      : this.getGates();
+    let gates = domain ? this.getGatesForDomain(domain) : this.getGates();
 
     // Filter by timing
-    gates = gates.filter(gate => 
-      gate.timing === timing || gate.timing === 'both'
+    gates = gates.filter(
+      (gate) => gate.timing === timing || gate.timing === 'both',
     );
 
     // Filter out skipped gates
-    gates = gates.filter(gate => 
-      !this.options.skipGates.includes(gate.id)
-    );
+    gates = gates.filter((gate) => !this.options.skipGates.includes(gate.id));
 
     if (this.options.verbose) {
-      console.log(`[QualityGates] Running ${gates.length} ${timing} gates for ${domain || 'all'} domain`);
+      console.log(
+        `[QualityGates] Running ${gates.length} ${timing} gates for ${domain || 'all'} domain`,
+      );
     }
 
     let allPassed = true;
@@ -114,13 +118,19 @@ export class GateRunner {
         results.push(result);
 
         if (!result.passed) {
-          if (result.severity === 'error' || 
-              (this.options.strictMode && result.severity === 'warning')) {
+          if (
+            result.severity === 'error' ||
+            (this.options.strictMode && result.severity === 'warning')
+          ) {
             allPassed = false;
-            blockingIssues.push(...result.issues.filter(i => i.severity === 'error'));
-            
+            blockingIssues.push(
+              ...result.issues.filter((i) => i.severity === 'error'),
+            );
+
             if (!this.options.continueOnFailure) {
-              console.log(`[QualityGates] Stopping on gate failure: ${gate.id}`);
+              console.log(
+                `[QualityGates] Stopping on gate failure: ${gate.id}`,
+              );
               break;
             }
           }
@@ -132,11 +142,13 @@ export class GateRunner {
           passed: false,
           severity: 'error',
           message: `Gate execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          issues: [{
-            severity: 'error',
-            message: error instanceof Error ? error.message : 'Unknown error',
-            rule: 'gate-execution',
-          }],
+          issues: [
+            {
+              severity: 'error',
+              message: error instanceof Error ? error.message : 'Unknown error',
+              rule: 'gate-execution',
+            },
+          ],
           durationMs: 0,
           skippable: gate.skippable,
         };
@@ -152,11 +164,12 @@ export class GateRunner {
     // Calculate summary
     const summary = {
       total: results.length,
-      passed: results.filter(r => r.passed).length,
-      failed: results.filter(r => !r.passed).length,
+      passed: results.filter((r) => r.passed).length,
+      failed: results.filter((r) => !r.passed).length,
       skipped: gates.length - results.length,
-      errors: results.filter(r => r.severity === 'error' && !r.passed).length,
-      warnings: results.filter(r => r.severity === 'warning' && !r.passed).length,
+      errors: results.filter((r) => r.severity === 'error' && !r.passed).length,
+      warnings: results.filter((r) => r.severity === 'warning' && !r.passed)
+        .length,
     };
 
     const totalDurationMs = Date.now() - startTime;
@@ -164,7 +177,7 @@ export class GateRunner {
     if (this.options.verbose) {
       console.log(
         `[QualityGates] Completed: ${summary.passed}/${summary.total} passed, ` +
-        `${summary.errors} errors, ${summary.warnings} warnings (${totalDurationMs}ms)`
+          `${summary.errors} errors, ${summary.warnings} warnings (${totalDurationMs}ms)`,
       );
     }
 
@@ -180,7 +193,10 @@ export class GateRunner {
   /**
    * Run pre-execution gates
    */
-  async runPreGates(context: GateContext, domain?: AgentDomain): Promise<GateExecutionResult> {
+  async runPreGates(
+    context: GateContext,
+    domain?: AgentDomain,
+  ): Promise<GateExecutionResult> {
     console.log('[QualityGates] Running pre-execution gates...');
     return this.runGates('pre', context, domain);
   }
@@ -188,7 +204,10 @@ export class GateRunner {
   /**
    * Run post-execution gates
    */
-  async runPostGates(context: GateContext, domain?: AgentDomain): Promise<GateExecutionResult> {
+  async runPostGates(
+    context: GateContext,
+    domain?: AgentDomain,
+  ): Promise<GateExecutionResult> {
     console.log('[QualityGates] Running post-execution gates...');
     return this.runGates('post', context, domain);
   }
@@ -197,7 +216,7 @@ export class GateRunner {
 
   private async runSingleGate(
     gate: QualityGate,
-    context: GateContext
+    context: GateContext,
   ): Promise<GateCheckResult> {
     const startTime = Date.now();
 
@@ -236,7 +255,7 @@ export class GateRunner {
   private async runCommandGate(
     gate: QualityGate,
     context: GateContext,
-    startTime: number
+    startTime: number,
   ): Promise<GateCheckResult> {
     return new Promise((resolve) => {
       const issues: GateIssue[] = [];
@@ -259,13 +278,14 @@ export class GateRunner {
 
       child.on('close', (code) => {
         const passed = code === 0;
-        
+
         if (!passed) {
           // Parse output for issues (simplified)
           const output = stdout + stderr;
-          const lines = output.split('\n').filter(l => l.trim());
-          
-          for (const line of lines.slice(0, 10)) { // Limit to 10 issues
+          const lines = output.split('\n').filter((l) => l.trim());
+
+          for (const line of lines.slice(0, 10)) {
+            // Limit to 10 issues
             issues.push({
               severity: gate.defaultSeverity,
               message: line.trim(),
@@ -279,8 +299,8 @@ export class GateRunner {
           gateName: gate.name,
           passed,
           severity: passed ? 'info' : gate.defaultSeverity,
-          message: passed 
-            ? `${gate.name} passed` 
+          message: passed
+            ? `${gate.name} passed`
             : `${gate.name} failed with exit code ${code}`,
           issues,
           durationMs: Date.now() - startTime,
@@ -295,11 +315,13 @@ export class GateRunner {
           passed: false,
           severity: 'error',
           message: `Failed to execute: ${error.message}`,
-          issues: [{
-            severity: 'error',
-            message: error.message,
-            rule: 'command-execution',
-          }],
+          issues: [
+            {
+              severity: 'error',
+              message: error.message,
+              rule: 'command-execution',
+            },
+          ],
           durationMs: Date.now() - startTime,
           skippable: gate.skippable,
         });
@@ -310,7 +332,9 @@ export class GateRunner {
   private timeout(gateId: string): Promise<GateCheckResult> {
     return new Promise((_, reject) => {
       setTimeout(() => {
-        reject(new Error(`Gate ${gateId} timed out after ${this.options.timeout}ms`));
+        reject(
+          new Error(`Gate ${gateId} timed out after ${this.options.timeout}ms`),
+        );
       }, this.options.timeout);
     });
   }
