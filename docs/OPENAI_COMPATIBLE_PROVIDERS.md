@@ -18,7 +18,7 @@ export OPENAI_COMPATIBLE_BASE_URL="https://api.z.ai/api/coding/paas/v4"
 export OPENAI_COMPATIBLE_MODEL="glm-4.7"  # optional, defaults to glm-4.7
 
 # Run gemini CLI
-npx @anthropic/gemini-cli
+npm start
 ```
 
 ### OpenRouter
@@ -28,7 +28,7 @@ export OPENAI_COMPATIBLE_API_KEY="sk-or-v1-..."
 export OPENAI_COMPATIBLE_BASE_URL="https://openrouter.ai/api/v1"
 export OPENAI_COMPATIBLE_MODEL="anthropic/claude-3.5-sonnet"  # or any OpenRouter model
 
-npx @anthropic/gemini-cli
+npm start
 ```
 
 ### Ollama (Local)
@@ -39,7 +39,7 @@ export OPENAI_COMPATIBLE_BASE_URL="http://localhost:11434/v1"
 export OPENAI_COMPATIBLE_API_KEY="ollama"  # can be any value
 export OPENAI_COMPATIBLE_MODEL="llama3.2"
 
-npx @anthropic/gemini-cli
+npm start
 ```
 
 ### LM Studio (Local)
@@ -49,7 +49,7 @@ npx @anthropic/gemini-cli
 export OPENAI_COMPATIBLE_BASE_URL="http://localhost:1234/v1"
 export OPENAI_COMPATIBLE_API_KEY="lm-studio"  # can be any value
 
-npx @anthropic/gemini-cli
+npm start
 ```
 
 ## Environment Variables
@@ -118,7 +118,6 @@ Z.AI and OpenRouter have their own rate limits. Check your provider's documentat
 ```bash
 git clone https://github.com/uglyswap/gemini-cli
 cd gemini-cli
-git checkout feature/openai-compatible-providers
 npm install
 npm run build
 
@@ -129,3 +128,26 @@ export OPENAI_COMPATIBLE_API_KEY="..."
 # Run
 npm start
 ```
+
+## Interactive Provider Configuration
+
+The easiest way to configure providers is through the interactive `/provider` command:
+
+```bash
+# Open the configuration dialog
+/provider
+
+# Or configure a specific provider directly
+/provider openrouter
+
+# List configured providers
+/provider list
+
+# Switch providers
+/provider switch anthropic
+
+# Check status
+/provider status
+```
+
+See the [main README](../README.md) for full details on available providers and commands.
