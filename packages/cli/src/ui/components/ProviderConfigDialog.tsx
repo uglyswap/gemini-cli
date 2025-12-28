@@ -15,6 +15,7 @@ import { RadioButtonSelect } from './shared/RadioButtonSelect.js';
 import { TextInput } from './shared/TextInput.js';
 import { useTextBuffer } from './shared/text-buffer.js';
 import { useUIState } from '../contexts/UIStateContext.js';
+import { useConfig } from '../contexts/ConfigContext.js';
 import {
   getConfigManager,
   getModelRegistry,
@@ -36,6 +37,7 @@ export function ProviderConfigDialog({
   initialProviderId,
 }: ProviderConfigDialogProps): React.JSX.Element | null {
   const { mainAreaWidth } = useUIState();
+  const config = useConfig();
   const viewportWidth = mainAreaWidth - 8;
 
   // Validate initialProviderId before using it
@@ -346,6 +348,9 @@ export function ProviderConfigDialog({
         // Set as active provider
         configManager.setActiveProvider(selectedProvider.id);
 
+        // Update the main Config's model so UI reflects the change
+        config.setModel(modelId);
+
         setStep('success');
 
         // Auto-close after a delay to let user read the success message
@@ -357,7 +362,7 @@ export function ProviderConfigDialog({
         setError(message);
       }
     },
-    [selectedProvider, apiKey, baseUrl, configManager, onClose],
+    [selectedProvider, apiKey, baseUrl, configManager, config, onClose],
   );
 
   // Get configured providers for showing status

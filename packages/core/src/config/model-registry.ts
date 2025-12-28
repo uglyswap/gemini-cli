@@ -107,10 +107,7 @@ const RETRY_CONFIG = {
   backoffMultiplier: 2,
 };
 
-/**
- * Maximum number of models to return (prevents UI overload)
- */
-const MAX_MODELS_LIMIT = 100;
+// No limit on models - show all available models
 
 /**
  * Sleep helper for delays
@@ -447,8 +444,7 @@ export class ModelRegistry {
         if (aScore !== -1) return -1;
         if (bScore !== -1) return 1;
         return a.id.localeCompare(b.id);
-      })
-      .slice(0, MAX_MODELS_LIMIT);
+      });
   }
 
   /**

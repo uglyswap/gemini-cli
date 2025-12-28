@@ -32,6 +32,7 @@ import {
   WEB_FETCH_TOOL_NAME,
   getVersion,
   PREVIEW_GEMINI_MODEL_AUTO,
+  getConfigManager,
   type HookDefinition,
   type HookEventName,
   type OutputFormat,
@@ -596,9 +597,15 @@ export async function loadCliConfig(
   const defaultModel = settings.general?.previewFeatures
     ? PREVIEW_GEMINI_MODEL_AUTO
     : DEFAULT_GEMINI_MODEL_AUTO;
+
+  // Check ConfigManager for OpenAI-compatible provider model
+  const configManager = getConfigManager();
+  const activeProviderModel = configManager.getActiveModel();
+
   const resolvedModel: string =
     argv.model ||
     process.env['GEMINI_MODEL'] ||
+    activeProviderModel ||
     settings.model?.name ||
     defaultModel;
 
