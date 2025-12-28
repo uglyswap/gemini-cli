@@ -1,5 +1,5 @@
 {
-  "name": "@google/gemini-cli",
+  "name": "@devora/cli",
   "version": "0.24.0-nightly.20251227.37be16243",
   "engines": {
     "node": ">=20.0.0"
@@ -11,7 +11,7 @@
   "private": "true",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/google-gemini/gemini-cli.git"
+    "url": "git+https://github.com/uglyswap/devora-cli.git"
   },
   "config": {
     "sandboxImageUri": "us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:0.24.0-nightly.20251227.37be16243"
@@ -70,7 +70,7 @@
   },
   "_comment_ink_fork": "Using @jrichman/ink fork (6.4.6) instead of official ink package due to critical bug fixes for terminal rendering and input handling that are not yet merged upstream. See https://github.com/vadimdemedes/ink/issues/XXX for details.",
   "bin": {
-    "gemini": "bundle/gemini.js"
+    "devora": "bundle/devora.js"
   },
   "files": [
     "bundle/",
