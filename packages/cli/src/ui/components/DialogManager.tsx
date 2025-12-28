@@ -23,7 +23,9 @@ import { RELAUNCH_EXIT_CODE } from '../../utils/processUtils.js';
 import { SessionBrowser } from './SessionBrowser.js';
 import { PermissionsModifyTrustDialog } from './PermissionsModifyTrustDialog.js';
 import { ModelDialog } from './ModelDialog.js';
+import { ProviderConfigDialog } from './ProviderConfigDialog.js';
 import { theme } from '../semantic-colors.js';
+import { AuthState } from '../types.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { useUIActions } from '../contexts/UIActionsContext.js';
 import { useConfig } from '../contexts/ConfigContext.js';
@@ -171,6 +173,17 @@ export const DialogManager = ({
           onCancel={uiActions.handleApiKeyCancel}
           error={uiState.authError}
           defaultValue={uiState.apiKeyDefaultValue}
+        />
+      </Box>
+    );
+  }
+  if (uiState.isAwaitingProviderConfig) {
+    return (
+      <Box flexDirection="column">
+        <ProviderConfigDialog
+          onClose={() => {
+            uiActions.setAuthState(AuthState.Unauthenticated);
+          }}
         />
       </Box>
     );

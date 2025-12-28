@@ -74,6 +74,11 @@ export function AuthDialog({
       value: AuthType.USE_VERTEX_AI,
       key: AuthType.USE_VERTEX_AI,
     },
+    {
+      label: 'Use OpenAI-compatible provider (OpenRouter, Ollama, etc.)',
+      value: AuthType.USE_OPENAI_COMPATIBLE,
+      key: AuthType.USE_OPENAI_COMPATIBLE,
+    },
   ];
 
   if (settings.merged.security?.auth?.enforcedType) {
@@ -139,6 +144,11 @@ export function AuthDialog({
             setAuthState(AuthState.AwaitingApiKeyInput);
             return;
           }
+        }
+
+        if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
+          setAuthState(AuthState.AwaitingProviderConfig);
+          return;
         }
       }
       setAuthState(AuthState.Unauthenticated);
