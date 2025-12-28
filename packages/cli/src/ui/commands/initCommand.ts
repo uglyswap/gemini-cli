@@ -16,7 +16,7 @@ import { performInit } from '@google/gemini-cli-core';
 
 export const initCommand: SlashCommand = {
   name: 'init',
-  description: 'Analyzes the project and creates a tailored GEMINI.md file',
+  description: 'Analyzes the project and creates a tailored DEVORA.md file',
   kind: CommandKind.BUILT_IN,
   autoExecute: true,
   action: async (
@@ -31,18 +31,18 @@ export const initCommand: SlashCommand = {
       };
     }
     const targetDir = context.services.config.getTargetDir();
-    const geminiMdPath = path.join(targetDir, 'GEMINI.md');
+    const devoraMdPath = path.join(targetDir, 'DEVORA.md');
 
-    const result = performInit(fs.existsSync(geminiMdPath));
+    const result = performInit(fs.existsSync(devoraMdPath));
 
     if (result.type === 'submit_prompt') {
-      // Create an empty GEMINI.md file
-      fs.writeFileSync(geminiMdPath, '', 'utf8');
+      // Create an empty DEVORA.md file
+      fs.writeFileSync(devoraMdPath, '', 'utf8');
 
       context.ui.addItem(
         {
           type: 'info',
-          text: 'Empty GEMINI.md created. Now analyzing the project to populate it.',
+          text: 'Empty DEVORA.md created. Now analyzing the project to populate it.',
         },
         Date.now(),
       );

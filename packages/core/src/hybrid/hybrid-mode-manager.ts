@@ -53,8 +53,8 @@ export const DEFAULT_HYBRID_CONFIG: HybridModeConfig = {
  * enhanced agent orchestration system. Agentic mode is ENABLED by default.
  *
  * To disable, use one of:
- * - GEMINI.md configuration: `enableAgentic: false`
- * - Environment variable: `GEMINI_AGENTIC_MODE=false`
+ * - DEVORA.md configuration: `enableAgentic: false`
+ * - Environment variable: `DEVORA_AGENTIC_MODE=false`
  * - CLI flag: `--no-agentic`
  * - In-session command: `/agentic disable`
  */
@@ -182,7 +182,7 @@ export class HybridModeManager {
 }
 
 /**
- * Parse hybrid mode configuration from GEMINI.md or environment
+ * Parse hybrid mode configuration from DEVORA.md or environment
  */
 export function parseHybridConfig(
   geminiMdConfig?: Record<string, unknown>,
@@ -191,14 +191,14 @@ export function parseHybridConfig(
   const config = { ...DEFAULT_HYBRID_CONFIG };
 
   // Check environment variable (can enable or disable)
-  const envAgenticMode = env?.['GEMINI_AGENTIC_MODE'];
+  const envAgenticMode = env?.['DEVORA_AGENTIC_MODE'];
   if (envAgenticMode === 'true') {
     config.enabled = true;
   } else if (envAgenticMode === 'false') {
     config.enabled = false;
   }
 
-  // Parse GEMINI.md configuration (overrides env)
+  // Parse DEVORA.md configuration (overrides env)
   if (geminiMdConfig) {
     if (typeof geminiMdConfig['enableAgentic'] === 'boolean') {
       config.enabled = geminiMdConfig['enableAgentic'];

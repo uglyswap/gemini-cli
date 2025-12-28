@@ -210,8 +210,8 @@
         },
         "hideContextSummary": {
           "title": "Hide Context Summary",
-          "description": "Hide the context summary (GEMINI.md, MCP servers) above the input.",
-          "markdownDescription": "Hide the context summary (GEMINI.md, MCP servers) above the input.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
+          "description": "Hide the context summary (DEVORA.md, MCP servers) above the input.",
+          "markdownDescription": "Hide the context summary (DEVORA.md, MCP servers) above the input.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
@@ -950,8 +950,8 @@
         },
         "loadMemoryFromIncludeDirectories": {
           "title": "Load Memory From Include Directories",
-          "description": "Controls how /memory refresh loads GEMINI.md files. When true, include directories are scanned; when false, only the current directory is used.",
-          "markdownDescription": "Controls how /memory refresh loads GEMINI.md files. When true, include directories are scanned; when false, only the current directory is used.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `false`",
+          "description": "Controls how /memory refresh loads DEVORA.md files. When true, include directories are scanned; when false, only the current directory is used.",
+          "markdownDescription": "Controls how /memory refresh loads DEVORA.md files. When true, include directories are scanned; when false, only the current directory is used.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },

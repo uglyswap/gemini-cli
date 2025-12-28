@@ -61,10 +61,10 @@ Do NOT use this tool:
 
 - \`fact\` (string, required): The specific fact or piece of information to remember. This should be a clear, self-contained statement. For example, if the user says "My favorite color is blue", the fact would be "My favorite color is blue".`;
 
-export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';
-export const MEMORY_SECTION_HEADER = '## Gemini Added Memories';
+export const DEFAULT_CONTEXT_FILENAME = 'DEVORA.md';
+export const MEMORY_SECTION_HEADER = '## Devora Added Memories';
 
-// This variable will hold the currently configured filename for GEMINI.md context files.
+// This variable will hold the currently configured filename for DEVORA.md context files.
 // It defaults to DEFAULT_CONTEXT_FILENAME but can be overridden by setGeminiMdFilename.
 let currentGeminiMdFilename: string | string[] = DEFAULT_CONTEXT_FILENAME;
 

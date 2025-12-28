@@ -1226,7 +1226,7 @@ export class Config {
 
   /**
    * Updates the system instruction with the latest user memory.
-   * Whenever the user memory (GEMINI.md files) is updated.
+   * Whenever the user memory (DEVORA.md files) is updated.
    */
   async updateSystemInstructionIfInitialized(): Promise<void> {
     const geminiClient = this.getGeminiClient();
