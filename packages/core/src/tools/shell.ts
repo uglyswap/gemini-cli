@@ -52,10 +52,12 @@ export const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 /**
  * Escapes a string for safe use in shell commands.
  * Prevents command injection by escaping special characters.
+ * This is a local helper function - use escapeShellArg from shell-utils.ts
+ * for the full version that accepts a ShellType parameter.
  * @param arg The argument to escape
  * @returns The escaped argument safe for shell use
  */
-export function escapeShellArg(arg: string): string {
+function escapeShellArgLocal(arg: string): string {
   if (os.platform() === 'win32') {
     // For PowerShell: escape special characters
     // Replace single quotes with two single quotes, wrap in single quotes
@@ -207,7 +209,7 @@ export class ShellToolInvocation extends BaseToolInvocation<
             let command = strippedCommand.trim();
             if (!command.endsWith('&')) command += ';';
             // Use escaped temp file path to prevent injection
-            const escapedTempPath = escapeShellArg(tempFilePath);
+            const escapedTempPath = escapeShellArgLocal(tempFilePath);
             return `{ ${command} }; __code=$?; pgrep -g 0 >${escapedTempPath} 2>&1; exit $__code;`;
           })();
 
