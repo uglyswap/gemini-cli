@@ -143,8 +143,20 @@ export class OrchestratorPlanningBridge {
     });
     createdTodos.push(mainTodo);
 
+    // Sort steps by order to ensure correct dependency chain
+    const sortedSteps = [...(plan.steps || [])].sort(
+      (a, b) => a.order - b.order,
+    );
+
+    // Map step.order -> todoId for dependency resolution
+    const stepOrderToTodoId = new Map<number, string>();
+
     // Create subtasks for each agent step
-    for (const step of plan.steps || []) {
+    for (const step of sortedSteps) {
+      // Find the previous step's todo ID for dependency
+      const previousStepOrder = step.order - 1;
+      const previousTodoId = stepOrderToTodoId.get(previousStepOrder);
+
       const stepTodo = this.todoManager.createTodo({
         content: `[Step ${step.order}] ${step.agentName}: ${step.description}`,
         activeForm: `[Step ${step.order}] Running ${step.agentName}`,
@@ -152,10 +164,12 @@ export class OrchestratorPlanningBridge {
         assignedAgentId: step.agentId,
         trustLevelRequired: step.trustLevel,
         parentTaskId: mainTodo.id,
-        dependencies:
-          step.order > 1 ? [createdTodos[createdTodos.length - 1].id] : [],
+        // Depend on previous step's todo if it exists
+        dependencies: previousTodoId ? [previousTodoId] : [],
         tags: ['agent-step', step.agentId],
       });
+
+      stepOrderToTodoId.set(step.order, stepTodo.id);
       createdTodos.push(stepTodo);
     }
 
@@ -392,7 +406,13 @@ ${originalPrompt}`;
 }
 
 /**
+ * Maximum input length for todo extraction to prevent ReDoS attacks
+ */
+const MAX_TODO_EXTRACTION_INPUT_LENGTH = 100_000;
+
+/**
  * Extract todo operations from agent output
+ * Includes ReDoS protection via input length limiting and bounded patterns
  */
 export function extractTodoOperationsFromOutput(output: string): Array<{
   operation: 'create' | 'complete' | 'block';
@@ -405,10 +425,21 @@ export function extractTodoOperationsFromOutput(output: string): Array<{
     blockers?: string[];
   }> = [];
 
-  // Look for TODO markers in output
-  const todoCreatePattern = /\[TODO:CREATE\]\s*(.+?)(?:\n|$)/g;
-  const todoCompletePattern = /\[TODO:COMPLETE\]\s*(.+?)(?:\n|$)/g;
-  const todoBlockPattern = /\[TODO:BLOCK\]\s*(.+?)\s*\|\s*(.+?)(?:\n|$)/g;
+  // ReDoS protection: limit input length
+  if (output.length > MAX_TODO_EXTRACTION_INPUT_LENGTH) {
+    console.warn(
+      `[TodoExtraction] Input exceeds ${MAX_TODO_EXTRACTION_INPUT_LENGTH} chars, truncating`,
+    );
+    output = output.slice(0, MAX_TODO_EXTRACTION_INPUT_LENGTH);
+  }
+
+  // Use bounded patterns with explicit character classes to prevent ReDoS
+  // [^\n]* is safer than .+? as it can't backtrack across newlines
+  const todoCreatePattern = /\[TODO:CREATE\]\s*([^\n]+?)(?:\n|$)/g;
+  const todoCompletePattern = /\[TODO:COMPLETE\]\s*([^\n]+?)(?:\n|$)/g;
+  // For block pattern, use [^\n|]+ to match content before pipe
+  const todoBlockPattern =
+    /\[TODO:BLOCK\]\s*([^\n|]+?)\s*\|\s*([^\n]+?)(?:\n|$)/g;
 
   let match: RegExpExecArray | null;
 

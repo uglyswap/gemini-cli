@@ -63,31 +63,37 @@ export class AgentSessionManager {
   }
 
   /**
-   * Get or create a session for an agent (with locking to prevent race conditions)
+   * Get or create a session for an agent (with atomic locking to prevent race conditions)
    */
   async getOrCreateSession(agent: SpecializedAgent): Promise<AgentSession> {
-    // Check if there's an ongoing creation for this agent
+    // Atomic check-and-set: if lock exists, wait for it; otherwise create atomically
     const existingLock = this.sessionCreationLocks.get(agent.id);
     if (existingLock) {
       return existingLock;
     }
 
-    // Check if we should reuse existing session
-    if (this.reuseAgentSessions) {
-      const existingSessionId = this.agentToSession.get(agent.id);
-      if (existingSessionId) {
-        const session = this.sessions.get(existingSessionId);
-        if (session && session.getState().isActive) {
-          return session;
+    // Create the promise immediately and set the lock atomically before any async operations
+    // This ensures no other concurrent call can get past this point
+    const creationPromise = (async () => {
+      // Check if we should reuse existing session (inside locked context)
+      if (this.reuseAgentSessions) {
+        const existingSessionId = this.agentToSession.get(agent.id);
+        if (existingSessionId) {
+          const session = this.sessions.get(existingSessionId);
+          if (session && session.getState().isActive) {
+            return session;
+          }
+          // Clean up stale reference
+          this.agentToSession.delete(agent.id);
+          this.sessions.delete(existingSessionId);
         }
-        // Clean up stale reference
-        this.agentToSession.delete(agent.id);
-        this.sessions.delete(existingSessionId);
       }
-    }
 
-    // Create a promise that will resolve with the new session
-    const creationPromise = this.createSessionInternal(agent);
+      // Create new session
+      return this.createSessionInternal(agent);
+    })();
+
+    // Set lock immediately (synchronously) before awaiting
     this.sessionCreationLocks.set(agent.id, creationPromise);
 
     try {
@@ -195,6 +201,12 @@ export class AgentSessionManager {
    * Close all sessions
    */
   async closeAllSessions(): Promise<void> {
+    // Wait for any pending session creations to complete before closing
+    if (this.sessionCreationLocks.size > 0) {
+      await Promise.allSettled(this.sessionCreationLocks.values());
+    }
+    this.sessionCreationLocks.clear();
+
     const closePromises = Array.from(this.sessions.values()).map((session) =>
       session.close(),
     );
@@ -205,9 +217,16 @@ export class AgentSessionManager {
 
   /**
    * Subscribe to session events from all managed sessions
+   * @returns Unsubscribe function to remove the callback
    */
-  onEvent(callback: AgentSessionEventCallback): void {
+  onEvent(callback: AgentSessionEventCallback): () => void {
     this.eventCallbacks.push(callback);
+    return () => {
+      const index = this.eventCallbacks.indexOf(callback);
+      if (index !== -1) {
+        this.eventCallbacks.splice(index, 1);
+      }
+    };
   }
 
   /**
@@ -231,16 +250,29 @@ export class AgentSessionManager {
 
   /**
    * Clean up expired sessions
+   * Skips sessions that might still be executing (active within last minute)
    */
   cleanupExpiredSessions(): number {
     const now = Date.now();
+    const safetyBuffer = 60_000; // 1 minute safety buffer for potentially executing sessions
     let cleaned = 0;
 
     for (const [sessionId, session] of this.sessions.entries()) {
       const state = session.getState();
       const lastActive = state.lastActiveAt.getTime();
+      const timeSinceActive = now - lastActive;
 
-      if (now - lastActive > this.sessionTimeoutMs) {
+      // Skip if session is not active (already closed)
+      if (!state.isActive) {
+        continue;
+      }
+
+      // Only clean up if session is expired AND hasn't been active recently
+      // The safety buffer prevents closing sessions that might be mid-execution
+      if (
+        timeSinceActive > this.sessionTimeoutMs &&
+        timeSinceActive > safetyBuffer
+      ) {
         // Fire-and-forget cleanup - we don't need to await individual session closures
         void this.closeSession(sessionId);
         cleaned++;

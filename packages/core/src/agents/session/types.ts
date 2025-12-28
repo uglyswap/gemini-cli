@@ -106,12 +106,19 @@ export interface ModelConfig {
 /**
  * Provider type for model resolution
  */
-export type ProviderType = 'gemini' | 'openai-compatible' | 'ollama' | 'openrouter';
+export type ProviderType =
+  | 'gemini'
+  | 'openai-compatible'
+  | 'ollama'
+  | 'openrouter';
 
 /**
  * Provider-specific model mappings
  */
-export const PROVIDER_MODEL_MAPPINGS: Record<ProviderType, Record<ModelTier, string>> = {
+export const PROVIDER_MODEL_MAPPINGS: Record<
+  ProviderType,
+  Record<ModelTier, string>
+> = {
   gemini: {
     flash: 'gemini-2.5-flash',
     pro: 'gemini-2.5-pro',
@@ -137,7 +144,10 @@ export const PROVIDER_MODEL_MAPPINGS: Record<ProviderType, Record<ModelTier, str
 /**
  * Default model tier configurations (without hardcoded model names)
  */
-export const DEFAULT_TIER_SETTINGS: Record<ModelTier, Omit<ModelConfig, 'modelName'>> = {
+export const DEFAULT_TIER_SETTINGS: Record<
+  ModelTier,
+  Omit<ModelConfig, 'modelName'>
+> = {
   flash: {
     maxOutputTokens: 8192,
     temperature: 0.7,
@@ -159,7 +169,10 @@ export const DEFAULT_TIER_SETTINGS: Record<ModelTier, Omit<ModelConfig, 'modelNa
  * Detect provider type from environment variables
  */
 export function detectProviderType(): ProviderType {
-  const baseUrl = process.env['OPENAI_COMPATIBLE_BASE_URL'] || process.env['OPENROUTER_BASE_URL'] || '';
+  const baseUrl =
+    process.env['OPENAI_COMPATIBLE_BASE_URL'] ||
+    process.env['OPENROUTER_BASE_URL'] ||
+    '';
 
   if (baseUrl.includes('openrouter.ai')) {
     return 'openrouter';
@@ -186,7 +199,8 @@ export function getModelConfigForTier(
 
   // Allow explicit model override from environment or config
   const envModel = process.env['OPENAI_COMPATIBLE_MODEL'];
-  const modelName = modelOverride ?? envModel ?? PROVIDER_MODEL_MAPPINGS[provider][tier];
+  const modelName =
+    modelOverride ?? envModel ?? PROVIDER_MODEL_MAPPINGS[provider][tier];
 
   return {
     modelName,
@@ -197,12 +211,34 @@ export function getModelConfigForTier(
 /**
  * Legacy: Model tier configurations (for backward compatibility)
  * @deprecated Use getModelConfigForTier() instead for multi-provider support
+ *
+ * Note: This uses a Proxy to defer evaluation until access time,
+ * ensuring environment variables are properly loaded.
  */
-export const MODEL_TIER_CONFIGS: Record<ModelTier, ModelConfig> = {
-  flash: getModelConfigForTier('flash'),
-  pro: getModelConfigForTier('pro'),
-  ultra: getModelConfigForTier('ultra'),
-};
+export const MODEL_TIER_CONFIGS: Record<ModelTier, ModelConfig> = new Proxy(
+  {} as Record<ModelTier, ModelConfig>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'flash' || prop === 'pro' || prop === 'ultra') {
+        return getModelConfigForTier(prop as ModelTier);
+      }
+      return undefined;
+    },
+    ownKeys() {
+      return ['flash', 'pro', 'ultra'];
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      if (prop === 'flash' || prop === 'pro' || prop === 'ultra') {
+        return {
+          configurable: true,
+          enumerable: true,
+          value: getModelConfigForTier(prop as ModelTier),
+        };
+      }
+      return undefined;
+    },
+  },
+);
 
 /**
  * Events emitted by agent sessions

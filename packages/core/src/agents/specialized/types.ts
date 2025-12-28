@@ -99,6 +99,8 @@ export interface AgentSpecialization {
   canSpawnSubAgents: boolean;
   /** Priority weight for agent selection (higher = more likely) */
   priority: number;
+  /** Agent IDs that must run before this agent (optional dependencies) */
+  dependencies?: string[];
 }
 
 /**

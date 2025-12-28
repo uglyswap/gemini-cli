@@ -17,8 +17,29 @@ import type { TrustLevel } from '../trust/types.js';
 
 /**
  * Todo item status
+ * Use as enum for iteration: Object.values(TodoStatus)
  */
-export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
+export enum TodoStatus {
+  PENDING = 'pending',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  BLOCKED = 'blocked',
+}
+
+/**
+ * Helper to get all TodoStatus values for iteration
+ */
+export const TODO_STATUS_VALUES = Object.values(TodoStatus) as TodoStatus[];
+
+/**
+ * Type guard to check if a string is a valid TodoStatus
+ */
+export function isValidTodoStatus(value: unknown): value is TodoStatus {
+  return (
+    typeof value === 'string' &&
+    (TODO_STATUS_VALUES as string[]).includes(value)
+  );
+}
 
 /**
  * Todo priority levels (1-10, higher = more important)
@@ -160,7 +181,10 @@ export interface TodoResult {
   /** Quality score (0-100) */
   qualityScore?: number;
 
-  /** Files that were modified */
+  /**
+   * Files that were modified
+   * @deprecated Use a consistent naming convention. Prefer `modifiedFiles` in new code.
+   */
   filesModified?: string[];
 
   /** Duration in milliseconds */

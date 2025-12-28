@@ -36,6 +36,38 @@ import {
   updateMetricsWithTodo,
 } from './todo-persistence.js';
 
+// =============================================================================
+// Token Estimation Constants
+// =============================================================================
+
+/**
+ * Constants for token estimation
+ * These values are approximations based on typical tokenization patterns
+ */
+const TOKEN_ESTIMATION = {
+  /** Approximate characters per token */
+  CHARS_PER_TOKEN: 4,
+  /** Base tokens for todo structure overhead */
+  TODO_BASE_TOKENS: 50,
+  /** Tokens per file reference */
+  TOKENS_PER_FILE: 10,
+  /** Tokens per decision reference */
+  TOKENS_PER_DECISION: 20,
+  /** Base tokens for decision structure */
+  DECISION_BASE_TOKENS: 30,
+  /** Maximum content preview length for summaries */
+  CONTENT_PREVIEW_LENGTH: 100,
+} as const;
+
+/**
+ * Estimate tokens for a text string
+ * @param text - The text to estimate tokens for
+ * @returns Estimated token count
+ */
+export function estimateTokensForText(text: string): number {
+  return Math.ceil(text.length / TOKEN_ESTIMATION.CHARS_PER_TOKEN);
+}
+
 /**
  * Compaction status for context management
  */
@@ -72,6 +104,10 @@ export class TodoManager {
   // Auto-save management
   private autoSaveTimer: ReturnType<typeof setInterval> | null = null;
   private isDirty: boolean = false;
+
+  // Performance: Cache for findTodo lookups
+  // Invalidated automatically when todos are modified (via markDirty)
+  private todoCache: Map<string, AgenticTodo> = new Map();
 
   constructor(projectRoot: string, config: Partial<TodoManagerConfig> = {}) {
     this.config = { ...DEFAULT_TODO_CONFIG, ...config };
@@ -204,10 +240,24 @@ export class TodoManager {
 
   /**
    * Create a new todo
+   * @throws Error if circular dependencies are detected
    */
   createTodo(options: CreateTodoOptions): AgenticTodo {
     const now = new Date().toISOString();
     const id = `todo-${Date.now()}-${randomUUID().slice(0, 8)}`;
+
+    // Check for circular dependencies before creating the todo
+    if (options.dependencies && options.dependencies.length > 0) {
+      const circularPath = this.detectCircularDependency(
+        id,
+        options.dependencies,
+      );
+      if (circularPath) {
+        throw new Error(
+          `Circular dependency detected: ${circularPath.join(' -> ')} -> ${id}`,
+        );
+      }
+    }
 
     // Generate activeForm if not provided
     const activeForm =
@@ -276,22 +326,40 @@ export class TodoManager {
 
   /**
    * Find a todo by ID (recursively searches all subtask levels)
+   * Uses cache for O(1) lookups after first access
    */
   findTodo(id: string): AgenticTodo | undefined {
-    const searchRecursively = (
-      todos: AgenticTodo[],
-    ): AgenticTodo | undefined => {
+    // Check cache first
+    const cached = this.todoCache.get(id);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    // Build cache if empty
+    if (this.todoCache.size === 0) {
+      this.buildTodoCache();
+      return this.todoCache.get(id);
+    }
+
+    // Not found in cache
+    return undefined;
+  }
+
+  /**
+   * Build the todo cache from current session todos
+   * Called lazily on first findTodo after cache invalidation
+   */
+  private buildTodoCache(): void {
+    const addToCache = (todos: AgenticTodo[]): void => {
       for (const todo of todos) {
-        if (todo.id === id) return todo;
-        // Recursively search in subtasks
+        this.todoCache.set(todo.id, todo);
+        // Recursively add subtasks
         if (todo.subtasks && todo.subtasks.length > 0) {
-          const found = searchRecursively(todo.subtasks);
-          if (found) return found;
+          addToCache(todo.subtasks);
         }
       }
-      return undefined;
     };
-    return searchRecursively(this.session.todos);
+    addToCache(this.session.todos);
   }
 
   /**
@@ -600,6 +668,7 @@ export class TodoManager {
 
   /**
    * Get next todo to work on (highest priority pending with resolved dependencies)
+   * Dependencies that no longer exist (e.g., were deleted) are treated as completed
    */
   getNextTodo(): AgenticTodo | undefined {
     const pending = this.getTodos(
@@ -615,7 +684,14 @@ export class TodoManager {
 
       const allDepsCompleted = todo.dependencies.every((depId) => {
         const dep = this.findTodo(depId);
-        return dep && dep.status === 'completed';
+        // If dependency doesn't exist (was deleted), treat as completed with warning
+        if (!dep) {
+          console.warn(
+            `[TodoManager] Dependency "${depId}" for todo "${todo.id}" no longer exists, treating as completed`,
+          );
+          return true;
+        }
+        return dep.status === 'completed';
       });
 
       if (allDepsCompleted) {
@@ -628,29 +704,52 @@ export class TodoManager {
 
   /**
    * Get summary statistics
+   * Optimized to compute all stats in a single pass over the todos
    */
   getSummary(): TodoSummary {
     const todos = this.flattenTodos();
 
-    const pending = todos.filter((t) => t.status === 'pending');
-    const inProgress = todos.filter((t) => t.status === 'in_progress');
-    const completed = todos.filter((t) => t.status === 'completed');
-    const blocked = todos.filter((t) => t.status === 'blocked');
-
-    // Calculate average priority
-    const avgPriority =
-      todos.length > 0
-        ? todos.reduce((sum, t) => sum + t.priority, 0) / todos.length
-        : 0;
-
-    // Count by agent
+    // Single pass to compute all statistics
+    let pendingCount = 0;
+    let inProgressCount = 0;
+    let completedCount = 0;
+    let blockedCount = 0;
+    let prioritySum = 0;
     const agentCounts: Record<string, number> = {};
+
     for (const todo of todos) {
+      // Count by status
+      switch (todo.status) {
+        case 'pending':
+          pendingCount++;
+          break;
+        case 'in_progress':
+          inProgressCount++;
+          break;
+        case 'completed':
+          completedCount++;
+          break;
+        case 'blocked':
+          blockedCount++;
+          break;
+        default:
+          // Handle any unexpected status values (runtime safety)
+          pendingCount++;
+          break;
+      }
+
+      // Accumulate priority for average
+      prioritySum += todo.priority;
+
+      // Count by agent
       if (todo.assignedAgentId) {
         agentCounts[todo.assignedAgentId] =
           (agentCounts[todo.assignedAgentId] || 0) + 1;
       }
     }
+
+    const total = todos.length;
+    const avgPriority = total > 0 ? prioritySum / total : 0;
 
     const topAgents = Object.entries(agentCounts)
       .map(([agentId, count]) => ({ agentId, count }))
@@ -658,12 +757,12 @@ export class TodoManager {
       .slice(0, 5);
 
     return {
-      total: todos.length,
-      pending: pending.length,
-      inProgress: inProgress.length,
-      completed: completed.length,
-      blocked: blocked.length,
-      completionRate: todos.length > 0 ? completed.length / todos.length : 0,
+      total,
+      pending: pendingCount,
+      inProgress: inProgressCount,
+      completed: completedCount,
+      blocked: blockedCount,
+      completionRate: total > 0 ? completedCount / total : 0,
       averagePriority: avgPriority,
       topAgents,
     };
@@ -722,24 +821,23 @@ export class TodoManager {
     const todos = this.flattenTodos();
     const decisions = this.session.sessionContext.keyDecisions;
 
-    // Estimate tokens (rough approximation)
+    // Estimate tokens using configured constants
     let estimatedTokens = 0;
 
     for (const todo of todos) {
-      // Base todo structure: ~50 tokens
-      estimatedTokens += 50;
-      // Content: ~1 token per 4 chars
-      estimatedTokens += Math.ceil(todo.content.length / 4);
-      // Files: ~10 tokens per file
-      estimatedTokens += todo.context.filesInvolved.length * 10;
-      // Decisions: ~20 tokens per decision
-      estimatedTokens += todo.context.decisionsMade.length * 20;
+      estimatedTokens += TOKEN_ESTIMATION.TODO_BASE_TOKENS;
+      estimatedTokens += estimateTokensForText(todo.content);
+      estimatedTokens +=
+        todo.context.filesInvolved.length * TOKEN_ESTIMATION.TOKENS_PER_FILE;
+      estimatedTokens +=
+        todo.context.decisionsMade.length *
+        TOKEN_ESTIMATION.TOKENS_PER_DECISION;
     }
 
     for (const decision of decisions) {
-      estimatedTokens += 30;
-      estimatedTokens += Math.ceil(decision.decision.length / 4);
-      estimatedTokens += Math.ceil(decision.rationale.length / 4);
+      estimatedTokens += TOKEN_ESTIMATION.DECISION_BASE_TOKENS;
+      estimatedTokens += estimateTokensForText(decision.decision);
+      estimatedTokens += estimateTokensForText(decision.rationale);
     }
 
     // Use configured maxPlanningTokens (default: ~20% of typical 100k context window)
@@ -783,6 +881,7 @@ export class TodoManager {
 
   /**
    * Perform compaction - archive completed todos and trim decisions
+   * Preserves non-completed subtasks by promoting them to root level
    */
   performCompaction(): CompactionInfo {
     const beforeUsage = this.estimateContextUsage();
@@ -791,15 +890,33 @@ export class TodoManager {
 
     this.emit({ type: 'compaction_triggered', reason: 'manual' });
 
+    // Collect non-completed subtasks from completed todos before archiving
+    const orphanedSubtasks: AgenticTodo[] = [];
+
     // Archive completed todos
     const completed = this.session.todos.filter(
       (t) => t.status === 'completed',
     );
     for (const todo of completed) {
+      // Extract non-completed subtasks before archiving
+      if (todo.subtasks && todo.subtasks.length > 0) {
+        const nonCompletedSubtasks = todo.subtasks.filter(
+          (s) => s.status !== 'completed',
+        );
+        for (const subtask of nonCompletedSubtasks) {
+          // Remove parent reference since parent is being archived
+          subtask.parentTaskId = undefined;
+          orphanedSubtasks.push(subtask);
+        }
+      }
+
       archivedItems.push({
         todoId: todo.id,
         contentSummary:
-          todo.content.slice(0, 100) + (todo.content.length > 100 ? '...' : ''),
+          todo.content.slice(0, TOKEN_ESTIMATION.CONTENT_PREVIEW_LENGTH) +
+          (todo.content.length > TOKEN_ESTIMATION.CONTENT_PREVIEW_LENGTH
+            ? '...'
+            : ''),
         finalStatus: 'completed',
         archivedAt: now,
       });
@@ -809,6 +926,14 @@ export class TodoManager {
     this.session.todos = this.session.todos.filter(
       (t) => t.status !== 'completed',
     );
+
+    // Add orphaned subtasks to root level
+    if (orphanedSubtasks.length > 0) {
+      console.log(
+        `[TodoManager] Promoted ${orphanedSubtasks.length} non-completed subtasks to root level during compaction`,
+      );
+      this.session.todos.push(...orphanedSubtasks);
+    }
 
     // Trim old decisions, keeping only the most recent
     const { preserveLastNDecisions } = this.config.compaction;
@@ -884,9 +1009,11 @@ export class TodoManager {
 
   /**
    * Mark session as dirty (needs saving)
+   * Also invalidates the todo cache since todos may have changed
    */
   private markDirty(): void {
     this.isDirty = true;
+    this.todoCache.clear(); // Invalidate cache on any modification
     this.session.lastActivityAt = new Date().toISOString();
   }
 
@@ -987,6 +1114,69 @@ export class TodoManager {
   // ==========================================================================
 
   /**
+   * Detect circular dependencies for a new todo
+   * @param newTodoId - The ID of the todo being created
+   * @param dependencies - The dependencies of the new todo
+   * @returns The circular path if found, or null if no cycle
+   */
+  private detectCircularDependency(
+    newTodoId: string,
+    dependencies: string[],
+  ): string[] | null {
+    // Build a map of todo ID -> dependencies for efficient lookup
+    const depMap = new Map<string, string[]>();
+    const allTodos = this.flattenTodos();
+
+    for (const todo of allTodos) {
+      depMap.set(todo.id, todo.dependencies || []);
+    }
+
+    // Add the new todo's dependencies to the map
+    depMap.set(newTodoId, dependencies);
+
+    // DFS to detect cycle starting from the new todo
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+    const path: string[] = [];
+
+    const hasCycle = (todoId: string): boolean => {
+      if (recursionStack.has(todoId)) {
+        // Found a cycle - build the path
+        const cycleStartIdx = path.indexOf(todoId);
+        if (cycleStartIdx !== -1) {
+          path.splice(0, cycleStartIdx);
+        }
+        return true;
+      }
+
+      if (visited.has(todoId)) {
+        return false;
+      }
+
+      visited.add(todoId);
+      recursionStack.add(todoId);
+      path.push(todoId);
+
+      const deps = depMap.get(todoId) || [];
+      for (const depId of deps) {
+        if (hasCycle(depId)) {
+          return true;
+        }
+      }
+
+      recursionStack.delete(todoId);
+      path.pop();
+      return false;
+    };
+
+    if (hasCycle(newTodoId)) {
+      return path;
+    }
+
+    return null;
+  }
+
+  /**
    * Generate active form from imperative content
    * "Fix the bug" -> "Fixing the bug"
    * "Add tests" -> "Adding tests"
@@ -998,7 +1188,7 @@ export class TodoManager {
     const verb = words[0].toLowerCase();
     let activeVerb = verb;
 
-    // Common verb transformations
+    // Common verb transformations including irregular verbs
     const verbMappings: Record<string, string> = {
       add: 'Adding',
       fix: 'Fixing',
@@ -1028,6 +1218,48 @@ export class TodoManager {
       analyze: 'Analyzing',
       design: 'Designing',
       document: 'Documenting',
+      // Irregular verbs that don't follow standard -ing rules
+      get: 'Getting',
+      set: 'Setting',
+      put: 'Putting',
+      cut: 'Cutting',
+      hit: 'Hitting',
+      let: 'Letting',
+      sit: 'Sitting',
+      begin: 'Beginning',
+      stop: 'Stopping',
+      drop: 'Dropping',
+      plan: 'Planning',
+      scan: 'Scanning',
+      ship: 'Shipping',
+      skip: 'Skipping',
+      wrap: 'Wrapping',
+      swap: 'Swapping',
+      map: 'Mapping',
+      pin: 'Pinning',
+      spin: 'Spinning',
+      win: 'Winning',
+      // Common programming verbs
+      push: 'Pushing',
+      pull: 'Pulling',
+      merge: 'Merging',
+      fetch: 'Fetching',
+      parse: 'Parsing',
+      sync: 'Syncing',
+      init: 'Initializing',
+      start: 'Starting',
+      execute: 'Executing',
+      handle: 'Handling',
+      process: 'Processing',
+      render: 'Rendering',
+      load: 'Loading',
+      save: 'Saving',
+      send: 'Sending',
+      receive: 'Receiving',
+      connect: 'Connecting',
+      disconnect: 'Disconnecting',
+      enable: 'Enabling',
+      disable: 'Disabling',
     };
 
     if (verbMappings[verb]) {

@@ -89,7 +89,8 @@ interface RegisteredHook<T> {
  */
 export class CompactionHooksManager {
   private readonly preCompactHooks: Array<RegisteredHook<PreCompactHook>> = [];
-  private readonly postCompactHooks: Array<RegisteredHook<PostCompactHook>> = [];
+  private readonly postCompactHooks: Array<RegisteredHook<PostCompactHook>> =
+    [];
   private readonly todoManager: TodoManager;
   private readonly contextManager: ContextManager;
   private readonly config: CompactionConfig;
@@ -294,9 +295,24 @@ export class CompactionHooksManager {
     compactionInfo?: CompactionInfo;
     preResults: Array<{ name: string; result: HookResult }>;
     postResults: Array<{ name: string; result: HookResult }>;
+    /** Aggregated errors from all failed hooks for easier error handling */
+    errors: Array<{ hookName: string; phase: 'pre' | 'post'; error: Error }>;
   }> {
+    const errors: Array<{
+      hookName: string;
+      phase: 'pre' | 'post';
+      error: Error;
+    }> = [];
+
     // Execute pre-compact hooks
     const preResult = await this.executePreCompactHooks();
+
+    // Collect pre-compact errors
+    for (const { name, result } of preResult.results) {
+      if (result.error) {
+        errors.push({ hookName: name, phase: 'pre', error: result.error });
+      }
+    }
 
     if (preResult.aborted) {
       return {
@@ -304,6 +320,7 @@ export class CompactionHooksManager {
         aborted: true,
         preResults: preResult.results,
         postResults: [],
+        errors,
       };
     }
 
@@ -316,12 +333,20 @@ export class CompactionHooksManager {
       preResult.data,
     );
 
+    // Collect post-compact errors
+    for (const { name, result } of postResult.results) {
+      if (result.error) {
+        errors.push({ hookName: name, phase: 'post', error: result.error });
+      }
+    }
+
     return {
       success: preResult.success && postResult.success,
       aborted: false,
       compactionInfo,
       preResults: preResult.results,
       postResults: postResult.results,
+      errors,
     };
   }
 
@@ -455,18 +480,40 @@ export class CompactionHooksManager {
   // ==========================================================================
 
   /**
-   * Check if compaction is needed and execute with hooks
+   * Result of checkAndCompact operation
    */
-  async checkAndCompact(): Promise<boolean> {
+  /** Check if compaction is needed and execute with hooks */
+  async checkAndCompact(): Promise<{
+    compacted: boolean;
+    success: boolean;
+    aborted: boolean;
+    errors: Array<{ hookName: string; phase: 'pre' | 'post'; error: Error }>;
+    warningTriggered: boolean;
+    recommendations: string[];
+  }> {
     if (!this.config.enabled) {
-      return false;
+      return {
+        compacted: false,
+        success: true,
+        aborted: false,
+        errors: [],
+        warningTriggered: false,
+        recommendations: [],
+      };
     }
 
     const status = this.todoManager.getCompactionStatus();
 
     if (status.compactionNeeded) {
       const result = await this.executeCompactionWithHooks();
-      return result.success && !result.aborted;
+      return {
+        compacted: true,
+        success: result.success,
+        aborted: result.aborted,
+        errors: result.errors,
+        warningTriggered: status.warningTriggered,
+        recommendations: status.recommendations,
+      };
     }
 
     if (status.warningTriggered) {
@@ -476,7 +523,14 @@ export class CompactionHooksManager {
       );
     }
 
-    return false;
+    return {
+      compacted: false,
+      success: true,
+      aborted: false,
+      errors: [],
+      warningTriggered: status.warningTriggered,
+      recommendations: status.recommendations,
+    };
   }
 }
 

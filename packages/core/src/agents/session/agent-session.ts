@@ -19,6 +19,23 @@ import type { Config } from '../../config/config.js';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
 
 /**
+ * Safely extract args from a functionCall object.
+ * Validates that args is a non-null object and returns it as Record<string, unknown>.
+ * @param args - The args from functionCall (can be any type from the API)
+ * @returns A validated Record<string, unknown> or empty object
+ */
+function safeArgs(args: unknown): Record<string, unknown> {
+  if (args === null || args === undefined) {
+    return {};
+  }
+  if (typeof args !== 'object') {
+    return {};
+  }
+  // TypeScript now knows args is an object
+  return args as Record<string, unknown>;
+}
+
+/**
  * Represents an isolated session for a specialized agent.
  * Each agent gets its own context window to prevent cross-contamination.
  */
@@ -240,7 +257,28 @@ IMPORTANT:
   }
 
   /**
-   * Build tools available to this agent based on its configuration
+   * Build tools available to this agent based on its configuration.
+   *
+   * This method constructs the set of tools that this agent can use during execution.
+   * Currently returns an empty array as tools are injected externally from the main CLI.
+   *
+   * @returns An array of Tool objects configured for this agent's capabilities.
+   *          The tools are filtered based on the agent's `tools` configuration property.
+   *
+   * @remarks
+   * - In the current implementation, tools are passed via sessionConfig.tools
+   * - Future implementations may dynamically filter tools based on agent.tools list
+   * - Tool access may be restricted based on agent trust level
+   *
+   * @example
+   * ```typescript
+   * // Tools are typically injected during session creation:
+   * const session = new AgentSession(config, generator, {
+   *   agent: codeReviewAgent,
+   *   tools: [readFileTool, writeFileTool],
+   *   workingDirectory: '/project'
+   * });
+   * ```
    */
   private buildAgentTools(): Tool[] {
     // For now, return empty array - tools will be injected from the main CLI
@@ -269,7 +307,7 @@ IMPORTANT:
       if (part.functionCall) {
         const toolCall: AgentToolCall = {
           name: part.functionCall.name || 'unknown',
-          args: (part.functionCall.args as Record<string, unknown>) || {},
+          args: safeArgs(part.functionCall.args),
           success: true, // Will be updated when executed
         };
         toolCalls.push(toolCall);

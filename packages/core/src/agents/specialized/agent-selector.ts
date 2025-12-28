@@ -267,8 +267,26 @@ export class AgentSelector {
 
   /**
    * Get recommended execution order for selected agents
+   * Uses topological sort when dependencies exist, falls back to domain-based ordering
    */
   getExecutionOrder(agents: AgentSpecialization[]): AgentSpecialization[] {
+    // Check if any agent has explicit dependencies
+    const hasDependencies = agents.some(
+      (a) => a.dependencies && a.dependencies.length > 0,
+    );
+
+    if (hasDependencies) {
+      return this.topologicalSort(agents);
+    }
+
+    // Fall back to domain-based ordering
+    return this.sortByDomain(agents);
+  }
+
+  /**
+   * Sort agents by domain priority (default ordering)
+   */
+  private sortByDomain(agents: AgentSpecialization[]): AgentSpecialization[] {
     // Define domain execution priority
     const domainOrder: Record<string, number> = {
       security: 1, // Security first
@@ -287,5 +305,96 @@ export class AgentSelector {
       const orderB = domainOrder[b.domain] || 5;
       return orderA - orderB;
     });
+  }
+
+  /**
+   * Topological sort for dependency-aware agent ordering
+   * Uses Kahn's algorithm for stable sorting
+   * Falls back to domain ordering if circular dependencies are detected
+   */
+  private topologicalSort(
+    agents: AgentSpecialization[],
+  ): AgentSpecialization[] {
+    const agentMap = new Map<string, AgentSpecialization>();
+    const inDegree = new Map<string, number>();
+    const adjacency = new Map<string, string[]>();
+
+    // Initialize data structures
+    for (const agent of agents) {
+      agentMap.set(agent.id, agent);
+      inDegree.set(agent.id, 0);
+      adjacency.set(agent.id, []);
+    }
+
+    // Build the dependency graph
+    for (const agent of agents) {
+      if (agent.dependencies) {
+        for (const depId of agent.dependencies) {
+          // Only consider dependencies that are in the selected agents list
+          if (agentMap.has(depId)) {
+            adjacency.get(depId)!.push(agent.id);
+            inDegree.set(agent.id, (inDegree.get(agent.id) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // Find all agents with no dependencies (in-degree 0)
+    const queue: string[] = [];
+    for (const [id, degree] of inDegree.entries()) {
+      if (degree === 0) {
+        queue.push(id);
+      }
+    }
+
+    // Sort initial queue by domain order for deterministic output
+    const domainSorted = this.sortByDomain(
+      queue.map((id) => agentMap.get(id)!),
+    );
+    const sortedQueue = domainSorted.map((a) => a.id);
+
+    const result: AgentSpecialization[] = [];
+    let processedCount = 0;
+
+    while (sortedQueue.length > 0) {
+      const currentId = sortedQueue.shift()!;
+      const currentAgent = agentMap.get(currentId);
+      if (currentAgent) {
+        result.push(currentAgent);
+        processedCount++;
+      }
+
+      // Process dependents
+      const dependents = adjacency.get(currentId) || [];
+      const readyDependents: AgentSpecialization[] = [];
+
+      for (const depId of dependents) {
+        const newDegree = (inDegree.get(depId) || 1) - 1;
+        inDegree.set(depId, newDegree);
+
+        if (newDegree === 0) {
+          const depAgent = agentMap.get(depId);
+          if (depAgent) {
+            readyDependents.push(depAgent);
+          }
+        }
+      }
+
+      // Sort newly ready agents by domain and add to queue
+      const sortedReadyDependents = this.sortByDomain(readyDependents);
+      for (const agent of sortedReadyDependents) {
+        sortedQueue.push(agent.id);
+      }
+    }
+
+    // Check for circular dependencies
+    if (processedCount !== agents.length) {
+      console.warn(
+        '[AgentSelector] Circular dependency detected in agents, falling back to domain ordering',
+      );
+      return this.sortByDomain(agents);
+    }
+
+    return result;
   }
 }

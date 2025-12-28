@@ -12,6 +12,7 @@
 
 import type { AgenticTodo, CompactionConfig } from './types.js';
 import type { TodoManager } from './todo-manager.js';
+import { estimateTokensForText } from './todo-manager.js';
 
 /**
  * Context snapshot for preservation during compaction
@@ -56,6 +57,33 @@ export enum ContextImportance {
 }
 
 /**
+ * Set of valid ContextImportance values for runtime validation
+ */
+const VALID_IMPORTANCE_VALUES = new Set<string>(
+  Object.values(ContextImportance),
+);
+
+/**
+ * Validates that a value is a valid ContextImportance
+ * Use this when importance values come from external sources (JSON, user input)
+ */
+export function isValidContextImportance(
+  value: unknown,
+): value is ContextImportance {
+  return typeof value === 'string' && VALID_IMPORTANCE_VALUES.has(value);
+}
+
+/**
+ * Safely get importance value, defaulting to MEDIUM if invalid
+ */
+function safeImportance(value: unknown): ContextImportance {
+  if (isValidContextImportance(value)) {
+    return value;
+  }
+  return ContextImportance.MEDIUM;
+}
+
+/**
  * Context item with importance rating
  */
 export interface RatedContextItem {
@@ -67,6 +95,15 @@ export interface RatedContextItem {
 }
 
 /**
+ * Cached rated context items with timestamp for invalidation
+ */
+interface ContextItemsCache {
+  items: RatedContextItem[];
+  timestamp: number;
+  todosVersion: number;
+}
+
+/**
  * Context Manager
  * Orchestrates context preservation, summarization, and injection
  */
@@ -74,9 +111,23 @@ export class ContextManager {
   private readonly todoManager: TodoManager;
   private readonly compactionConfig: CompactionConfig;
 
+  /** Cache for rated context items (expensive to compute) */
+  private contextItemsCache: ContextItemsCache | null = null;
+
+  /** Cache TTL in milliseconds (5 seconds - short to stay fresh but avoid repeated computation) */
+  private static readonly CACHE_TTL_MS = 5000;
+
   constructor(todoManager: TodoManager, compactionConfig: CompactionConfig) {
     this.todoManager = todoManager;
     this.compactionConfig = compactionConfig;
+  }
+
+  /**
+   * Invalidate the context items cache
+   * Call this when todos or decisions are modified
+   */
+  invalidateCache(): void {
+    this.contextItemsCache = null;
   }
 
   // ==========================================================================
@@ -182,9 +233,40 @@ export class ContextManager {
   // ==========================================================================
 
   /**
-   * Gather all context items with importance ratings
+   * Gather all context items with importance ratings (with caching)
    */
   private gatherRatedContextItems(): RatedContextItem[] {
+    const now = Date.now();
+    const todosVersion = this.todoManager.getAllTodos().length;
+
+    // Check if cache is valid
+    if (this.contextItemsCache) {
+      const cacheAge = now - this.contextItemsCache.timestamp;
+      const versionMatches =
+        this.contextItemsCache.todosVersion === todosVersion;
+
+      if (cacheAge < ContextManager.CACHE_TTL_MS && versionMatches) {
+        return this.contextItemsCache.items;
+      }
+    }
+
+    // Compute fresh items
+    const items = this.computeRatedContextItems();
+
+    // Update cache
+    this.contextItemsCache = {
+      items,
+      timestamp: now,
+      todosVersion,
+    };
+
+    return items;
+  }
+
+  /**
+   * Compute rated context items (internal, uncached)
+   */
+  private computeRatedContextItems(): RatedContextItem[] {
     const items: RatedContextItem[] = [];
     const todos = this.todoManager.getAllTodos();
     const decisions = this.todoManager.getRecentDecisions(20);
@@ -232,12 +314,30 @@ export class ContextManager {
   }
 
   /**
-   * Rate the importance of a todo
+   * Rate the importance of a todo, considering its subtasks
    */
   private rateTodoImportance(todo: AgenticTodo): ContextImportance {
     // In-progress tasks are always critical
     if (todo.status === 'in_progress') {
       return ContextImportance.CRITICAL;
+    }
+
+    // Check if any subtask is in progress (makes parent critical)
+    if (todo.subtasks && todo.subtasks.length > 0) {
+      const hasInProgressSubtask = todo.subtasks.some(
+        (s) => s.status === 'in_progress',
+      );
+      if (hasInProgressSubtask) {
+        return ContextImportance.CRITICAL;
+      }
+
+      // Check if any subtask is blocked (makes parent high importance)
+      const hasBlockedSubtask = todo.subtasks.some(
+        (s) => s.status === 'blocked',
+      );
+      if (hasBlockedSubtask) {
+        return ContextImportance.HIGH;
+      }
     }
 
     // Blocked tasks are high importance
@@ -265,37 +365,51 @@ export class ContextManager {
 
   /**
    * Select items within token budget
+   * Optimized to use bucket-based selection instead of full sort (O(n) vs O(n log n))
    */
   private selectItemsWithinBudget(
     items: RatedContextItem[],
     maxTokens: number,
   ): RatedContextItem[] {
-    // Sort by importance (critical first) then by tokens (smaller first within same importance)
-    const importanceOrder: Record<ContextImportance, number> = {
-      [ContextImportance.CRITICAL]: 0,
-      [ContextImportance.HIGH]: 1,
-      [ContextImportance.MEDIUM]: 2,
-      [ContextImportance.LOW]: 3,
+    // Bucket items by importance level (O(n) grouping)
+    const buckets: Record<ContextImportance, RatedContextItem[]> = {
+      [ContextImportance.CRITICAL]: [],
+      [ContextImportance.HIGH]: [],
+      [ContextImportance.MEDIUM]: [],
+      [ContextImportance.LOW]: [],
     };
 
-    const sorted = [...items].sort((a, b) => {
-      const importanceDiff =
-        importanceOrder[a.importance] - importanceOrder[b.importance];
-      if (importanceDiff !== 0) return importanceDiff;
-      return a.tokens - b.tokens;
-    });
+    for (const item of items) {
+      buckets[item.importance].push(item);
+    }
+
+    // Sort only within buckets (smaller arrays) by token count
+    for (const importance of Object.keys(buckets) as ContextImportance[]) {
+      buckets[importance].sort((a, b) => a.tokens - b.tokens);
+    }
 
     const selected: RatedContextItem[] = [];
     let totalTokens = 0;
 
-    for (const item of sorted) {
-      if (totalTokens + item.tokens <= maxTokens) {
-        selected.push(item);
-        totalTokens += item.tokens;
-      } else if (item.importance === ContextImportance.CRITICAL) {
-        // Always include critical items, even if over budget
-        selected.push(item);
-        totalTokens += item.tokens;
+    // Process in importance order, selecting from each bucket
+    const importanceOrder: ContextImportance[] = [
+      ContextImportance.CRITICAL,
+      ContextImportance.HIGH,
+      ContextImportance.MEDIUM,
+      ContextImportance.LOW,
+    ];
+
+    for (const importance of importanceOrder) {
+      for (const item of buckets[importance]) {
+        if (totalTokens + item.tokens <= maxTokens) {
+          selected.push(item);
+          totalTokens += item.tokens;
+        } else if (importance === ContextImportance.CRITICAL) {
+          // Always include critical items, even if over budget
+          selected.push(item);
+          totalTokens += item.tokens;
+        }
+        // Early termination: if budget exceeded and not critical, stop processing lower priority
       }
     }
 
@@ -330,7 +444,9 @@ export class ContextManager {
     if (todos.length > 0) {
       xml += '  <todos>\n';
       for (const todo of todos) {
-        xml += `    <todo importance="${this.escapeXml(todo.importance)}">\n`;
+        // Validate importance to prevent injection from corrupted data
+        const importance = safeImportance(todo.importance);
+        xml += `    <todo importance="${this.escapeXml(importance)}">\n`;
         xml += `      ${this.escapeXml(todo.content)}\n`;
         xml += '    </todo>\n';
       }
@@ -340,7 +456,9 @@ export class ContextManager {
     if (decisions.length > 0) {
       xml += '  <recent-decisions>\n';
       for (const decision of decisions) {
-        xml += `    <decision importance="${this.escapeXml(decision.importance)}">\n`;
+        // Validate importance to prevent injection from corrupted data
+        const importance = safeImportance(decision.importance);
+        xml += `    <decision importance="${this.escapeXml(importance)}">\n`;
         xml += `      ${this.escapeXml(decision.content)}\n`;
         xml += '    </decision>\n';
       }
@@ -414,11 +532,11 @@ export class ContextManager {
   // ==========================================================================
 
   /**
-   * Estimate tokens for a string (rough approximation)
+   * Estimate tokens for a string
+   * @deprecated Use estimateTokensForText from todo-manager.js instead
    */
   private estimateTokens(text: string): number {
-    // Rough estimate: ~4 characters per token
-    return Math.ceil(text.length / 4);
+    return estimateTokensForText(text);
   }
 
   // ==========================================================================

@@ -58,8 +58,47 @@ function isValidPatterns(arr: unknown): arr is TaskPattern[] {
   return arr.every((item) => {
     if (typeof item !== 'object' || item === null) return false;
     const pattern = item as Record<string, unknown>;
-    return typeof pattern['patternId'] === 'string';
+    // Field is 'id' according to TaskPattern interface, not 'patternId'
+    return typeof pattern['id'] === 'string';
   });
+}
+
+/**
+ * Result type for operations that can fail with detailed errors
+ */
+export interface PersistenceResult<T> {
+  success: boolean;
+  data: T | null;
+  error?: {
+    type: 'file_not_found' | 'parse_error' | 'validation_error' | 'io_error';
+    message: string;
+    originalError?: Error;
+  };
+}
+
+/**
+ * Parse JSON with detailed error information
+ */
+function parseJsonSafe<T>(
+  content: string,
+  filePath: string,
+): PersistenceResult<T> {
+  try {
+    const parsed = JSON.parse(content) as T;
+    return { success: true, data: parsed };
+  } catch (error) {
+    const parseError =
+      error instanceof Error ? error : new Error(String(error));
+    return {
+      success: false,
+      data: null,
+      error: {
+        type: 'parse_error',
+        message: `Failed to parse JSON in ${filePath}: ${parseError.message}`,
+        originalError: parseError,
+      },
+    };
+  }
 }
 
 /**
@@ -75,6 +114,81 @@ const FILES = {
 } as const;
 
 /**
+ * Content size limits to prevent DoS attacks (in bytes)
+ */
+const SIZE_LIMITS = {
+  /** Maximum session file size (10MB) */
+  SESSION: 10 * 1024 * 1024,
+  /** Maximum metrics file size (1MB) */
+  METRICS: 1 * 1024 * 1024,
+  /** Maximum patterns file size (5MB) */
+  PATTERNS: 5 * 1024 * 1024,
+  /** Maximum scratchpad size (100KB) - already enforced in HIGH-13 */
+  SCRATCHPAD: 100 * 1024,
+  /** Maximum single todo content length (10KB) */
+  TODO_CONTENT: 10 * 1024,
+  /** Maximum export file size (50MB) */
+  EXPORT: 50 * 1024 * 1024,
+} as const;
+
+/**
+ * Validates content size against a limit
+ * @throws Error if content exceeds the limit
+ */
+function validateContentSize(
+  content: string,
+  limit: number,
+  description: string,
+): void {
+  const sizeBytes = Buffer.byteLength(content, 'utf-8');
+  if (sizeBytes > limit) {
+    throw new Error(
+      `Content size (${sizeBytes} bytes) exceeds limit for ${description} (${limit} bytes)`,
+    );
+  }
+}
+
+/**
+ * Sanitize storage directory path to prevent path traversal attacks
+ * @throws Error if path contains dangerous sequences
+ */
+function sanitizeStorageDir(storageDir: string, projectRoot: string): string {
+  // Normalize the path to resolve any . or .. segments
+  const normalizedDir = path.normalize(storageDir);
+
+  // Check for path traversal sequences that could escape intended directory
+  // These checks are done after normalization to catch encoded or indirect traversals
+  if (
+    normalizedDir.includes('..') ||
+    normalizedDir.includes('\0') || // Null byte injection
+    (normalizedDir.startsWith('/') && !path.isAbsolute(storageDir)) // Unix root escape
+  ) {
+    throw new Error(
+      `Invalid storage directory path: "${storageDir}" contains path traversal sequences`,
+    );
+  }
+
+  // Compute the resolved path
+  const resolvedPath = path.isAbsolute(normalizedDir)
+    ? normalizedDir
+    : path.join(projectRoot, normalizedDir);
+
+  // Verify the resolved path is under projectRoot (unless it's an absolute path)
+  if (!path.isAbsolute(storageDir)) {
+    const normalizedProjectRoot = path.normalize(projectRoot);
+    const normalizedResolved = path.normalize(resolvedPath);
+
+    if (!normalizedResolved.startsWith(normalizedProjectRoot)) {
+      throw new Error(
+        `Invalid storage directory: "${storageDir}" resolves outside project root`,
+      );
+    }
+  }
+
+  return resolvedPath;
+}
+
+/**
  * Todo Persistence Manager
  * Handles all file I/O for the planning system
  */
@@ -87,9 +201,8 @@ export class TodoPersistence {
     projectRoot: string,
     config: Pick<TodoManagerConfig, 'storageDir'>,
   ) {
-    this.baseDir = path.isAbsolute(config.storageDir)
-      ? config.storageDir
-      : path.join(projectRoot, config.storageDir);
+    // Sanitize the storage directory to prevent path traversal attacks
+    this.baseDir = sanitizeStorageDir(config.storageDir, projectRoot);
     this.historyDir = path.join(this.baseDir, 'history');
     this.contextDir = path.join(this.baseDir, 'context');
     this.ensureDirectories();
@@ -124,34 +237,85 @@ export class TodoPersistence {
 
   /**
    * Save the active session to disk
+   * @throws Error if session exceeds size limit
    */
   saveSession(session: TodoSession): void {
     const filePath = path.join(this.baseDir, FILES.ACTIVE_SESSION);
     const content = JSON.stringify(session, null, 2);
+    validateContentSize(content, SIZE_LIMITS.SESSION, 'session');
     fs.writeFileSync(filePath, content, 'utf-8');
   }
 
   /**
-   * Load the active session from disk
+   * Load the active session from disk with detailed error information
    */
-  loadSession(): TodoSession | null {
+  loadSessionWithResult(): PersistenceResult<TodoSession> {
     const filePath = path.join(this.baseDir, FILES.ACTIVE_SESSION);
     if (!fs.existsSync(filePath)) {
-      return null;
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'file_not_found',
+          message: `Session file not found: ${filePath}`,
+        },
+      };
     }
 
+    let content: string;
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (!isValidSession(parsed)) {
-        console.error('[TodoPersistence] Invalid session format in file');
-        return null;
-      }
-      return parsed;
+      content = fs.readFileSync(filePath, 'utf-8');
     } catch (error) {
-      console.error('[TodoPersistence] Failed to load session:', error);
+      const ioError = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'io_error',
+          message: `Failed to read session file: ${ioError.message}`,
+          originalError: ioError,
+        },
+      };
+    }
+
+    const parseResult = parseJsonSafe<unknown>(content, filePath);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        data: null,
+        error: parseResult.error,
+      };
+    }
+
+    if (!isValidSession(parseResult.data)) {
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'validation_error',
+          message: `Invalid session format in file: ${filePath}`,
+        },
+      };
+    }
+
+    return { success: true, data: parseResult.data };
+  }
+
+  /**
+   * Load the active session from disk
+   * @deprecated Use loadSessionWithResult() for better error handling
+   */
+  loadSession(): TodoSession | null {
+    const result = this.loadSessionWithResult();
+    if (!result.success) {
+      if (result.error?.type !== 'file_not_found') {
+        console.error(
+          `[TodoPersistence] ${result.error?.type}: ${result.error?.message}`,
+        );
+      }
       return null;
     }
+    return result.data;
   }
 
   /**
@@ -167,6 +331,7 @@ export class TodoPersistence {
 
   /**
    * List all archived sessions
+   * Optimized to extract info from filenames and file stats instead of reading each file
    */
   listArchivedSessions(): Array<{ sessionId: string; startedAt: string }> {
     if (!fs.existsSync(this.historyDir)) {
@@ -178,17 +343,32 @@ export class TodoPersistence {
       .filter((f) => f.endsWith('.json'));
 
     return files.map((file) => {
+      const sessionId = file.replace('.json', '');
       const filePath = path.join(this.historyDir, file);
+
+      // Try to extract timestamp from session ID (format: session-{timestamp}-{uuid})
+      // This avoids reading the file content for every archived session
+      const timestampMatch = sessionId.match(/^session-(\d+)-/);
+      if (timestampMatch) {
+        const timestamp = parseInt(timestampMatch[1], 10);
+        if (!isNaN(timestamp)) {
+          return {
+            sessionId,
+            startedAt: new Date(timestamp).toISOString(),
+          };
+        }
+      }
+
+      // Fallback: use file mtime (still faster than reading/parsing JSON)
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const session = JSON.parse(content) as TodoSession;
+        const stats = fs.statSync(filePath);
         return {
-          sessionId: session.sessionId,
-          startedAt: session.startedAt,
+          sessionId,
+          startedAt: stats.mtime.toISOString(),
         };
       } catch {
         return {
-          sessionId: file.replace('.json', ''),
+          sessionId,
           startedAt: 'unknown',
         };
       }
@@ -196,29 +376,77 @@ export class TodoPersistence {
   }
 
   /**
-   * Load an archived session
+   * Load an archived session with detailed error information
    */
-  loadArchivedSession(sessionId: string): TodoSession | null {
+  loadArchivedSessionWithResult(
+    sessionId: string,
+  ): PersistenceResult<TodoSession> {
     const filePath = path.join(this.historyDir, `${sessionId}.json`);
     if (!fs.existsSync(filePath)) {
-      return null;
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'file_not_found',
+          message: `Archived session file not found: ${filePath}`,
+        },
+      };
     }
 
+    let content: string;
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (!isValidSession(parsed)) {
-        console.error('[TodoPersistence] Invalid archived session format');
-        return null;
-      }
-      return parsed;
+      content = fs.readFileSync(filePath, 'utf-8');
     } catch (error) {
-      console.error(
-        '[TodoPersistence] Failed to load archived session:',
-        error,
-      );
+      const ioError = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'io_error',
+          message: `Failed to read archived session file: ${ioError.message}`,
+          originalError: ioError,
+        },
+      };
+    }
+
+    const parseResult = parseJsonSafe<unknown>(content, filePath);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        data: null,
+        error: parseResult.error,
+      };
+    }
+
+    if (!isValidSession(parseResult.data)) {
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'validation_error',
+          message: `Invalid archived session format in file: ${filePath}`,
+        },
+      };
+    }
+
+    return { success: true, data: parseResult.data };
+  }
+
+  /**
+   * Load an archived session
+   * @deprecated Use loadArchivedSessionWithResult() for better error handling
+   */
+  loadArchivedSession(sessionId: string): TodoSession | null {
+    const result = this.loadArchivedSessionWithResult(sessionId);
+    if (!result.success) {
+      if (result.error?.type !== 'file_not_found') {
+        console.error(
+          `[TodoPersistence] ${result.error?.type}: ${result.error?.message}`,
+        );
+      }
       return null;
     }
+    return result.data;
   }
 
   /**
@@ -264,34 +492,85 @@ export class TodoPersistence {
 
   /**
    * Save metrics to disk
+   * @throws Error if metrics exceed size limit
    */
   saveMetrics(metrics: TodoMetrics): void {
     const filePath = path.join(this.baseDir, FILES.METRICS);
     const content = JSON.stringify(metrics, null, 2);
+    validateContentSize(content, SIZE_LIMITS.METRICS, 'metrics');
     fs.writeFileSync(filePath, content, 'utf-8');
   }
 
   /**
-   * Load metrics from disk
+   * Load metrics from disk with detailed error information
    */
-  loadMetrics(): TodoMetrics | null {
+  loadMetricsWithResult(): PersistenceResult<TodoMetrics> {
     const filePath = path.join(this.baseDir, FILES.METRICS);
     if (!fs.existsSync(filePath)) {
-      return null;
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'file_not_found',
+          message: `Metrics file not found: ${filePath}`,
+        },
+      };
     }
 
+    let content: string;
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (!isValidMetrics(parsed)) {
-        console.error('[TodoPersistence] Invalid metrics format in file');
-        return null;
-      }
-      return parsed;
+      content = fs.readFileSync(filePath, 'utf-8');
     } catch (error) {
-      console.error('[TodoPersistence] Failed to load metrics:', error);
+      const ioError = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'io_error',
+          message: `Failed to read metrics file: ${ioError.message}`,
+          originalError: ioError,
+        },
+      };
+    }
+
+    const parseResult = parseJsonSafe<unknown>(content, filePath);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        data: null,
+        error: parseResult.error,
+      };
+    }
+
+    if (!isValidMetrics(parseResult.data)) {
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'validation_error',
+          message: `Invalid metrics format in file: ${filePath}`,
+        },
+      };
+    }
+
+    return { success: true, data: parseResult.data };
+  }
+
+  /**
+   * Load metrics from disk
+   * @deprecated Use loadMetricsWithResult() for better error handling
+   */
+  loadMetrics(): TodoMetrics | null {
+    const result = this.loadMetricsWithResult();
+    if (!result.success) {
+      if (result.error?.type !== 'file_not_found') {
+        console.error(
+          `[TodoPersistence] ${result.error?.type}: ${result.error?.message}`,
+        );
+      }
       return null;
     }
+    return result.data;
   }
 
   // ==========================================================================
@@ -300,34 +579,85 @@ export class TodoPersistence {
 
   /**
    * Save patterns to disk
+   * @throws Error if patterns exceed size limit
    */
   savePatterns(patterns: TaskPattern[]): void {
     const filePath = path.join(this.baseDir, FILES.PATTERNS);
     const content = JSON.stringify(patterns, null, 2);
+    validateContentSize(content, SIZE_LIMITS.PATTERNS, 'patterns');
     fs.writeFileSync(filePath, content, 'utf-8');
   }
 
   /**
-   * Load patterns from disk
+   * Load patterns from disk with detailed error information
    */
-  loadPatterns(): TaskPattern[] {
+  loadPatternsWithResult(): PersistenceResult<TaskPattern[]> {
     const filePath = path.join(this.baseDir, FILES.PATTERNS);
     if (!fs.existsSync(filePath)) {
-      return [];
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'file_not_found',
+          message: `Patterns file not found: ${filePath}`,
+        },
+      };
     }
 
+    let content: string;
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (!isValidPatterns(parsed)) {
-        console.error('[TodoPersistence] Invalid patterns format in file');
-        return [];
-      }
-      return parsed;
+      content = fs.readFileSync(filePath, 'utf-8');
     } catch (error) {
-      console.error('[TodoPersistence] Failed to load patterns:', error);
+      const ioError = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'io_error',
+          message: `Failed to read patterns file: ${ioError.message}`,
+          originalError: ioError,
+        },
+      };
+    }
+
+    const parseResult = parseJsonSafe<unknown>(content, filePath);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        data: null,
+        error: parseResult.error,
+      };
+    }
+
+    if (!isValidPatterns(parseResult.data)) {
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'validation_error',
+          message: `Invalid patterns format in file: ${filePath}`,
+        },
+      };
+    }
+
+    return { success: true, data: parseResult.data };
+  }
+
+  /**
+   * Load patterns from disk
+   * @deprecated Use loadPatternsWithResult() for better error handling
+   */
+  loadPatterns(): TaskPattern[] {
+    const result = this.loadPatternsWithResult();
+    if (!result.success) {
+      if (result.error?.type !== 'file_not_found') {
+        console.error(
+          `[TodoPersistence] ${result.error?.type}: ${result.error?.message}`,
+        );
+      }
       return [];
     }
+    return result.data ?? [];
   }
 
   // ==========================================================================
@@ -374,12 +704,53 @@ export class TodoPersistence {
   }
 
   /**
-   * Append to the scratchpad
+   * Maximum scratchpad size in bytes (1MB)
+   */
+  private static readonly MAX_SCRATCHPAD_SIZE = 1024 * 1024;
+
+  /**
+   * Append to the scratchpad with size limit enforcement
    */
   appendToScratchpad(note: string): void {
     const current = this.getScratchpad();
     const timestamp = new Date().toISOString();
-    const updated = `${current}\n## ${timestamp}\n\n${note}\n`;
+    let updated = `${current}\n## ${timestamp}\n\n${note}\n`;
+
+    // Enforce size limit by truncating oldest entries if needed
+    if (
+      Buffer.byteLength(updated, 'utf-8') > TodoPersistence.MAX_SCRATCHPAD_SIZE
+    ) {
+      // Find and remove oldest entries until we're under the limit
+      const lines = updated.split('\n');
+      while (
+        Buffer.byteLength(lines.join('\n'), 'utf-8') >
+          TodoPersistence.MAX_SCRATCHPAD_SIZE &&
+        lines.length > 10 // Keep at least the header and latest entry
+      ) {
+        // Remove lines after the header section (first 6 lines)
+        const headerEndIndex = lines.findIndex(
+          (line, idx) => idx > 5 && line.startsWith('## '),
+        );
+        if (headerEndIndex > 5) {
+          // Find the next section start
+          const nextSectionIndex = lines.findIndex(
+            (line, idx) => idx > headerEndIndex && line.startsWith('## '),
+          );
+          if (nextSectionIndex > headerEndIndex) {
+            lines.splice(headerEndIndex, nextSectionIndex - headerEndIndex);
+          } else {
+            break; // Can't find more sections to remove
+          }
+        } else {
+          break; // No more sections to remove
+        }
+      }
+      updated = lines.join('\n');
+      console.warn(
+        '[TodoPersistence] Scratchpad size limit reached, oldest entries removed',
+      );
+    }
+
     this.updateScratchpad(updated);
   }
 
@@ -547,27 +918,74 @@ ${sessionContext.completedWorkSummary}
   }
 
   /**
-   * Import a session from a JSON file
+   * Import a session from a JSON file with detailed error information
    */
-  importSession(inputPath: string): TodoSession | null {
+  importSessionWithResult(inputPath: string): PersistenceResult<TodoSession> {
     if (!fs.existsSync(inputPath)) {
-      return null;
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'file_not_found',
+          message: `Import file not found: ${inputPath}`,
+        },
+      };
     }
 
+    let content: string;
     try {
-      const content = fs.readFileSync(inputPath, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (!isValidSession(parsed)) {
-        console.error(
-          '[TodoPersistence] Invalid session format in import file',
-        );
-        return null;
-      }
-      return parsed;
+      content = fs.readFileSync(inputPath, 'utf-8');
     } catch (error) {
-      console.error('[TodoPersistence] Failed to import session:', error);
+      const ioError = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'io_error',
+          message: `Failed to read import file: ${ioError.message}`,
+          originalError: ioError,
+        },
+      };
+    }
+
+    const parseResult = parseJsonSafe<unknown>(content, inputPath);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        data: null,
+        error: parseResult.error,
+      };
+    }
+
+    if (!isValidSession(parseResult.data)) {
+      return {
+        success: false,
+        data: null,
+        error: {
+          type: 'validation_error',
+          message: `Invalid session format in import file: ${inputPath}`,
+        },
+      };
+    }
+
+    return { success: true, data: parseResult.data };
+  }
+
+  /**
+   * Import a session from a JSON file
+   * @deprecated Use importSessionWithResult() for better error handling
+   */
+  importSession(inputPath: string): TodoSession | null {
+    const result = this.importSessionWithResult(inputPath);
+    if (!result.success) {
+      if (result.error?.type !== 'file_not_found') {
+        console.error(
+          `[TodoPersistence] ${result.error?.type}: ${result.error?.message}`,
+        );
+      }
       return null;
     }
+    return result.data;
   }
 
   /**

@@ -9,6 +9,7 @@
  * For the main multi-agent orchestration system
  */
 
+import type { TrustPrivileges } from '../trust/types.js';
 import { TrustLevel } from '../trust/types.js';
 import type {
   AgentSpecialization,
@@ -18,17 +19,9 @@ import type {
 import type { GateExecutionResult } from '../safety/quality-gates/types.js';
 
 /**
- * Execution phases
+ * Execution phases (uppercase is canonical, lowercase is deprecated)
  */
 export type ExecutionPhase =
-  | 'init'
-  | 'explain'
-  | 'snapshot'
-  | 'execute'
-  | 'validate'
-  | 'report'
-  | 'error'
-  | 'rollback'
   | 'INIT'
   | 'EXPLAIN'
   | 'SNAPSHOT'
@@ -37,6 +30,34 @@ export type ExecutionPhase =
   | 'REPORT'
   | 'ERROR'
   | 'ROLLBACK';
+
+/**
+ * Legacy lowercase phase names for backward compatibility
+ * @deprecated Use uppercase ExecutionPhase values
+ */
+export type LegacyExecutionPhase =
+  | 'init'
+  | 'explain'
+  | 'snapshot'
+  | 'execute'
+  | 'validate'
+  | 'report'
+  | 'error'
+  | 'rollback';
+
+/**
+ * Combined phase type for backward compatibility
+ */
+export type ExecutionPhaseCompat = ExecutionPhase | LegacyExecutionPhase;
+
+/**
+ * Normalize a phase to uppercase canonical form
+ */
+export function normalizeExecutionPhase(
+  phase: ExecutionPhaseCompat,
+): ExecutionPhase {
+  return phase.toUpperCase() as ExecutionPhase;
+}
 
 /**
  * Execution step (alias for backward compatibility)
@@ -80,7 +101,7 @@ export interface AgentExecutionResult {
   /** Execution duration in ms */
   durationMs: number;
   /** Agent output/response */
-  output: unknown;
+  output: string;
   /** Error message if failed */
   error?: string;
   /** Whether this was a critical failure */
@@ -165,6 +186,8 @@ export interface OrchestratorConfig {
   verbose: boolean;
   /** Require approval above this trust level */
   requireApprovalAbove?: TrustLevel;
+  /** Timeout for individual agent execution in milliseconds (default: 5 minutes) */
+  agentTimeoutMs?: number;
   /** Model configuration */
   modelConfig: {
     fastModel: string;
@@ -188,7 +211,7 @@ export interface ExecutionPlanStep {
   /** Trust level for this step */
   trustLevel: TrustLevel;
   /** Privileges for this step */
-  privileges: unknown;
+  privileges: TrustPrivileges;
   /** Estimated complexity */
   estimatedComplexity: TaskComplexity | string;
 }
@@ -239,12 +262,15 @@ export interface AgentExecution {
   /** Duration in milliseconds */
   durationMs?: number;
   /** Output from the agent */
-  output: unknown;
+  output: string;
   /** Error if failed */
   error?: string;
-  /** Files modified */
+  /** Files modified during execution */
   modifiedFiles?: string[];
-  /** Alias for modifiedFiles (backward compatibility) */
+  /**
+   * Alias for modifiedFiles
+   * @deprecated Use `modifiedFiles` instead. This field will be removed in a future version.
+   */
   filesModified?: string[];
   /** Tools used during execution */
   toolsUsed?: string[];
@@ -287,10 +313,10 @@ export interface ExecutionReport {
 }
 
 /**
- * Default orchestrator configuration
+ * Default orchestrator configuration values (without projectRoot)
+ * Use getDefaultOrchestratorConfig() to get a complete config with projectRoot
  */
-export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
-  projectRoot: process.cwd(),
+const DEFAULT_CONFIG_VALUES: Omit<OrchestratorConfig, 'projectRoot'> = {
   enableTrustCascade: true,
   enableMultiAgent: true,
   enableSnapshots: true,
@@ -306,6 +332,49 @@ export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
     powerfulModel: 'gemini-1.5-pro',
   },
 };
+
+/**
+ * Get default orchestrator configuration with projectRoot evaluated at runtime
+ * This prevents issues with module load-time evaluation of process.cwd()
+ */
+export function getDefaultOrchestratorConfig(
+  projectRoot?: string,
+): OrchestratorConfig {
+  return {
+    projectRoot: projectRoot ?? process.cwd(),
+    ...DEFAULT_CONFIG_VALUES,
+  };
+}
+
+/**
+ * Default orchestrator configuration
+ * @deprecated Use getDefaultOrchestratorConfig() for proper runtime evaluation of projectRoot
+ *
+ * Note: Uses a Proxy to defer process.cwd() evaluation until access time
+ */
+export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = new Proxy(
+  {} as OrchestratorConfig,
+  {
+    get(_target, prop: string) {
+      const config = getDefaultOrchestratorConfig();
+      return config[prop as keyof OrchestratorConfig];
+    },
+    ownKeys() {
+      return Object.keys(getDefaultOrchestratorConfig());
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      const config = getDefaultOrchestratorConfig();
+      if (prop in config) {
+        return {
+          configurable: true,
+          enumerable: true,
+          value: config[prop as keyof OrchestratorConfig],
+        };
+      }
+      return undefined;
+    },
+  },
+);
 
 /**
  * Phase transition callback

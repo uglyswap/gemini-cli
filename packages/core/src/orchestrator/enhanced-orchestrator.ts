@@ -20,7 +20,6 @@ import type { SpecializedAgent } from '../agents/specialized/types.js';
 import { SnapshotManager } from '../safety/snapshot/snapshot-manager.js';
 import { GateRunner } from '../safety/quality-gates/gate-runner.js';
 import { AgentSessionManager } from '../agents/session/agent-session-manager.js';
-import type { AgentTaskResult } from '../agents/session/types.js';
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 
@@ -46,6 +45,7 @@ export class EnhancedAgentOrchestrator {
   private currentPhase: ExecutionPhase = 'INIT';
   private phaseCallbacks: PhaseCallback[] = [];
   private approvalCallbacks: ApprovalCallback[] = [];
+  private sessionEventUnsubscribe: (() => void) | null = null;
 
   constructor(
     cliConfig: Config,
@@ -82,13 +82,12 @@ export class EnhancedAgentOrchestrator {
       reuseAgentSessions: true,
     });
 
-    // Subscribe to session events
-    this.sessionManager.onEvent((event) => {
+    // Subscribe to session events and store unsubscribe function for cleanup
+    this.sessionEventUnsubscribe = this.sessionManager.onEvent((event) => {
       if (event.type === 'task_completed') {
-        const agentId = this.sessionManager
-          .getSession(event.sessionId)
-          ?.getAgent().id;
-        if (agentId) {
+        const session = this.sessionManager.getSession(event.sessionId);
+        if (session) {
+          const agentId = session.getAgent().id;
           // Record execution in trust engine
           this.trustEngine.recordExecution(agentId, {
             success: event.result.success,
@@ -113,10 +112,17 @@ export class EnhancedAgentOrchestrator {
   ): Promise<ExecutionReport> {
     const startTime = Date.now();
 
-    if (options?.onPhaseChange) {
+    // Prevent duplicate callbacks when executeTask is called in parallel
+    if (
+      options?.onPhaseChange &&
+      !this.phaseCallbacks.includes(options.onPhaseChange)
+    ) {
       this.phaseCallbacks.push(options.onPhaseChange);
     }
-    if (options?.onApprovalRequired) {
+    if (
+      options?.onApprovalRequired &&
+      !this.approvalCallbacks.includes(options.onApprovalRequired)
+    ) {
       this.approvalCallbacks.push(options.onApprovalRequired);
     }
 
@@ -213,7 +219,14 @@ export class EnhancedAgentOrchestrator {
           gateResults.gates,
         );
         if (shouldRollback) {
-          await this.snapshotManager.restoreSnapshot(snapshotId);
+          try {
+            await this.snapshotManager.restoreSnapshot(snapshotId);
+          } catch (rollbackError) {
+            console.error(
+              'Rollback after validation failure failed:',
+              rollbackError,
+            );
+          }
         }
       }
 
@@ -293,7 +306,13 @@ export class EnhancedAgentOrchestrator {
    * Cleanup all resources
    */
   async cleanup(): Promise<void> {
-    this.sessionManager.closeAllSessions();
+    // Unsubscribe from session events to prevent memory leaks
+    if (this.sessionEventUnsubscribe) {
+      this.sessionEventUnsubscribe();
+      this.sessionEventUnsubscribe = null;
+    }
+    // Await the async closeAllSessions method
+    await this.sessionManager.closeAllSessions();
     await this.snapshotManager.cleanup();
   }
 
@@ -414,8 +433,12 @@ export class EnhancedAgentOrchestrator {
     return this.requestApproval(rollbackPlan);
   }
 
+  /** Default timeout for agent execution in milliseconds (5 minutes) */
+  private static readonly DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+
   /**
    * Execute a single agent with its task
+   * Includes timeout protection to prevent hanging agents
    */
   private async executeAgent(
     agent: SpecializedAgent,
@@ -428,10 +451,18 @@ export class EnhancedAgentOrchestrator {
     // Build agent-specific task prompt
     const agentTask = this.buildAgentTask(agent, task, plan);
 
+    // Use configured timeout or default
+    const timeoutMs =
+      this.config.agentTimeoutMs ??
+      EnhancedAgentOrchestrator.DEFAULT_AGENT_TIMEOUT_MS;
+
     try {
-      // Execute via session manager (isolated context)
-      const result: AgentTaskResult =
-        await this.sessionManager.executeAgentTask(agent, agentTask);
+      // Execute via session manager with timeout protection
+      const result = await this.executeWithTimeout(
+        this.sessionManager.executeAgentTask(agent, agentTask),
+        timeoutMs,
+        agent.id,
+      );
 
       return {
         agentId: agent.id,
@@ -459,6 +490,37 @@ export class EnhancedAgentOrchestrator {
         toolsUsed: [],
         filesModified: [],
       };
+    }
+  }
+
+  /**
+   * Execute a promise with a timeout
+   * Rejects with a timeout error if the promise doesn't resolve in time
+   */
+  private async executeWithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    agentId: string,
+  ): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(
+          new Error(
+            `Agent ${agentId} execution timed out after ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+    });
+
+    try {
+      const result = await Promise.race([promise, timeoutPromise]);
+      return result;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
   }
 
