@@ -67,7 +67,10 @@
     "cliui": {
       "wrap-ansi": "7.0.0"
     },
-    "jws": "^3.2.3"
+    "jws": "^3.2.3",
+    "gradient-string": {
+      "chalk": "^4.1.2"
+    }
   },
   "_comment_ink_fork": "Using @jrichman/ink fork (6.4.6) instead of official ink package due to critical bug fixes for terminal rendering and input handling that are not yet merged upstream. See https://github.com/vadimdemedes/ink/issues/XXX for details.",
   "bin": {
