@@ -42,5 +42,11 @@ export function validateAuthMethod(authMethod: string): string | null {
     return null;
   }
 
+  if (authMethod === AuthType.USE_OPENAI_COMPATIBLE) {
+    // OpenAI-compatible providers are configured via ProviderConfigDialog
+    // No environment variables required at validation time
+    return null;
+  }
+
   return 'Invalid auth method selected.';
 }
