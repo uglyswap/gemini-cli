@@ -556,50 +556,6 @@ export class GeminiClient {
 
     const resultStream = turn.run(modelConfigKey, request, linkedSignal);
 
-    // Track promises that need proper handling
-    const processingComplete = (async () => {
-      for await (const event of resultStream) {
-        if (this.loopDetector.addAndCheck(event)) {
-          yield { type: GeminiEventType.LoopDetected };
-          controller.abort();
-          return turn;
-        }
-        yield event;
-
-        this.updateTelemetryTokenCount();
-
-        if (event.type === GeminiEventType.InvalidStream) {
-          if (this.config.getContinueOnFailedApiCall()) {
-            if (isInvalidStreamRetry) {
-              // We already retried once, so stop here.
-              logContentRetryFailure(
-                this.config,
-                new ContentRetryFailureEvent(
-                  4, // 2 initial + 2 after injections
-                  'FAILED_AFTER_PROMPT_INJECTION',
-                  modelToUse,
-                ),
-              );
-              return turn;
-            }
-            const nextRequest = [{ text: 'System: Please continue.' }];
-            yield* this.sendMessageStream(
-              nextRequest,
-              signal,
-              prompt_id,
-              boundedTurns - 1,
-              true, // Set isInvalidStreamRetry to true
-            );
-            return turn;
-          }
-        }
-        if (event.type === GeminiEventType.Error) {
-          return turn;
-        }
-      }
-      return turn;
-    })();
-
     // Yield events from the processing
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {
