@@ -51,7 +51,7 @@ describe('ContextManager', () => {
     it('should load and format global and environment memory', async () => {
       const mockGlobalResult: memoryDiscovery.MemoryLoadResult = {
         files: [
-          { path: '/home/user/.gemini/GEMINI.md', content: 'Global Content' },
+          { path: '/home/user/.gemini/DEVORA.md', content: 'Global Content' },
         ],
       };
       vi.mocked(memoryDiscovery.loadGlobalMemory).mockResolvedValue(
@@ -59,7 +59,7 @@ describe('ContextManager', () => {
       );
 
       const mockEnvResult: memoryDiscovery.MemoryLoadResult = {
-        files: [{ path: '/app/GEMINI.md', content: 'Env Content' }],
+        files: [{ path: '/app/DEVORA.md', content: 'Env Content' }],
       };
       vi.mocked(memoryDiscovery.loadEnvironmentMemory).mockResolvedValue(
         mockEnvResult,
@@ -69,7 +69,7 @@ describe('ContextManager', () => {
 
       expect(memoryDiscovery.loadGlobalMemory).toHaveBeenCalledWith(false);
       expect(contextManager.getGlobalMemory()).toMatch(
-        /--- Context from: .*GEMINI.md ---/,
+        /--- Context from: .*DEVORA.md ---/,
       );
       expect(contextManager.getGlobalMemory()).toContain('Global Content');
 
@@ -79,7 +79,7 @@ describe('ContextManager', () => {
         false,
       );
       expect(contextManager.getEnvironmentMemory()).toContain(
-        '--- Context from: GEMINI.md ---',
+        '--- Context from: DEVORA.md ---',
       );
       expect(contextManager.getEnvironmentMemory()).toContain('Env Content');
       expect(contextManager.getEnvironmentMemory()).toContain(
@@ -87,17 +87,17 @@ describe('ContextManager', () => {
       );
 
       expect(contextManager.getLoadedPaths()).toContain(
-        '/home/user/.gemini/GEMINI.md',
+        '/home/user/.gemini/DEVORA.md',
       );
-      expect(contextManager.getLoadedPaths()).toContain('/app/GEMINI.md');
+      expect(contextManager.getLoadedPaths()).toContain('/app/DEVORA.md');
     });
 
     it('should emit MemoryChanged event when memory is refreshed', async () => {
       const mockGlobalResult = {
-        files: [{ path: '/app/GEMINI.md', content: 'content' }],
+        files: [{ path: '/app/DEVORA.md', content: 'content' }],
       };
       const mockEnvResult = {
-        files: [{ path: '/app/src/GEMINI.md', content: 'env content' }],
+        files: [{ path: '/app/src/DEVORA.md', content: 'env content' }],
       };
       vi.mocked(memoryDiscovery.loadGlobalMemory).mockResolvedValue(
         mockGlobalResult,
@@ -117,7 +117,7 @@ describe('ContextManager', () => {
   describe('discoverContext', () => {
     it('should discover and load new context', async () => {
       const mockResult: memoryDiscovery.MemoryLoadResult = {
-        files: [{ path: '/app/src/GEMINI.md', content: 'Src Content' }],
+        files: [{ path: '/app/src/DEVORA.md', content: 'Src Content' }],
       };
       vi.mocked(memoryDiscovery.loadJitSubdirectoryMemory).mockResolvedValue(
         mockResult,
@@ -135,7 +135,7 @@ describe('ContextManager', () => {
       );
       expect(result).toMatch(/--- Context from: src[\\/]GEMINI\.md ---/);
       expect(result).toContain('Src Content');
-      expect(contextManager.getLoadedPaths()).toContain('/app/src/GEMINI.md');
+      expect(contextManager.getLoadedPaths()).toContain('/app/src/DEVORA.md');
     });
 
     it('should return empty string if no new files found', async () => {

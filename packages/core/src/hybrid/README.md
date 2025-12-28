@@ -6,9 +6,9 @@ This module adds multi-agent orchestration capabilities to gemini-cli, combining
 
 ### Enable Agentic Mode
 
-**Option 1: GEMINI.md Configuration**
+**Option 1: DEVORA.md Configuration**
 
-Add to your `GEMINI.md`:
+Add to your `DEVORA.md`:
 
 ```markdown
 ## Agentic Mode Configuration
@@ -241,7 +241,7 @@ console.log('Agents used:', report.agentExecutions.map(e => e.agentName));
 
 ## Configuration Reference
 
-### GEMINI.md Options
+### DEVORA.md Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|

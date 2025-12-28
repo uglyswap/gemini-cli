@@ -465,7 +465,7 @@ https://github.com/google-gemini/gemini-cli/compare/v0.21.0-preview.6...v0.22.0-
   https://github.com/google-gemini/gemini-cli/pull/14324
 - Use polling for extensions-reload integration test by @chrstnb in
   https://github.com/google-gemini/gemini-cli/pull/14391
-- Add docs directive to GEMINI.md by @g-samroberts in
+- Add docs directive to DEVORA.md by @g-samroberts in
   https://github.com/google-gemini/gemini-cli/pull/14327
 - Hide sessions that don't have user messages by @bl-ue in
   https://github.com/google-gemini/gemini-cli/pull/13994
@@ -855,7 +855,7 @@ https://github.com/google-gemini/gemini-cli/compare/v0.18.0-preview.4...v0.19.0-
   by @SandyTao520 in https://github.com/google-gemini/gemini-cli/pull/13473
 - Revert "feat(core): Fix bug with incorrect model overriding." by @adamfweidman
   in https://github.com/google-gemini/gemini-cli/pull/13483
-- Fix: Update system instruction when GEMINI.md memory is loaded or refreshed by
+- Fix: Update system instruction when DEVORA.md memory is loaded or refreshed by
   @lifefloating in https://github.com/google-gemini/gemini-cli/pull/12136
 - fix(zed-integration): Ensure that the zed integration is classified as
   interactive by @benbrandt in

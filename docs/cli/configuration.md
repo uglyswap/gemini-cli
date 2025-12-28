@@ -59,9 +59,9 @@ contain other project-specific files related to Gemini CLI's operation, such as:
 
 - **`contextFileName`** (string or array of strings):
   - **Description:** Specifies the filename for context files (e.g.,
-    `GEMINI.md`, `AGENTS.md`). Can be a single filename or a list of accepted
+    `DEVORA.md`, `AGENTS.md`). Can be a single filename or a list of accepted
     filenames.
-  - **Default:** `GEMINI.md`
+  - **Default:** `DEVORA.md`
   - **Example:** `"contextFileName": "AGENTS.md"`
 
 - **`bugCommand`** (object):
@@ -376,8 +376,8 @@ contain other project-specific files related to Gemini CLI's operation, such as:
 
 - **`loadMemoryFromIncludeDirectories`** (boolean):
   - **Description:** Controls the behavior of the `/memory refresh` command. If
-    set to `true`, `GEMINI.md` files should be loaded from all directories that
-    are added. If set to `false`, `GEMINI.md` should only be loaded from the
+    set to `true`, `DEVORA.md` files should be loaded from all directories that
+    are added. If set to `false`, `DEVORA.md` should only be loaded from the
     current directory.
   - **Default:** `false`
   - **Example:**
@@ -609,7 +609,7 @@ for that specific session.
 ## Context files (hierarchical instructional context)
 
 While not strictly configuration for the CLI's _behavior_, context files
-(defaulting to `GEMINI.md` but configurable via the `contextFileName` setting)
+(defaulting to `DEVORA.md` but configurable via the `contextFileName` setting)
 are crucial for configuring the _instructional context_ (also referred to as
 "memory") provided to the Gemini model. This powerful feature allows you to give
 project-specific instructions, coding style guides, or any relevant background
@@ -622,7 +622,7 @@ context.
   that you want the Gemini model to be aware of during your interactions. The
   system is designed to manage this instructional context hierarchically.
 
-### Example context file content (e.g., `GEMINI.md`)
+### Example context file content (e.g., `DEVORA.md`)
 
 Here's a conceptual example of what a context file at the root of a TypeScript
 project might contain:
@@ -664,13 +664,13 @@ you. Project-specific context files are highly encouraged to establish
 conventions and context.
 
 - **Hierarchical loading and precedence:** The CLI implements a sophisticated
-  hierarchical memory system by loading context files (e.g., `GEMINI.md`) from
+  hierarchical memory system by loading context files (e.g., `DEVORA.md`) from
   several locations. Content from files lower in this list (more specific)
   typically overrides or supplements content from files higher up (more
   general). The exact concatenation order and final context can be inspected
   using the `/memory show` command. The typical loading order is:
   1.  **Global context file:**
-      - Location: `~/.gemini/<contextFileName>` (e.g., `~/.gemini/GEMINI.md` in
+      - Location: `~/.gemini/<contextFileName>` (e.g., `~/.gemini/DEVORA.md` in
         your user home directory).
       - Scope: Provides default instructions for all your projects.
   2.  **Project root and ancestors context files:**
