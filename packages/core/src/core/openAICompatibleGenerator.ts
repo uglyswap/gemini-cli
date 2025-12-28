@@ -164,11 +164,26 @@ export function createOpenAICompatibleContentGenerator(
           const parts: Part[] = [];
 
           for (const [, toolCall] of accumulatedToolCalls) {
+            // Skip tool calls without a name or with empty arguments
+            if (!toolCall.name || !toolCall.arguments.trim()) {
+              continue;
+            }
+
             try {
+              const parsedArgs = JSON.parse(toolCall.arguments);
+              // Skip if parsed args is empty object (indicates incomplete streaming)
+              if (
+                typeof parsedArgs === 'object' &&
+                parsedArgs !== null &&
+                Object.keys(parsedArgs).length === 0
+              ) {
+                continue;
+              }
+
               parts.push({
                 functionCall: {
                   name: toolCall.name,
-                  args: JSON.parse(toolCall.arguments),
+                  args: parsedArgs,
                 },
               });
             } catch (e) {
@@ -402,7 +417,7 @@ function convertToOpenAIFormat(
         .join('\n');
 
       return {
-        role: (role === 'user' ? 'user' : 'assistant'),
+        role: role === 'user' ? 'user' : 'assistant',
         content: text,
       };
     })
@@ -497,27 +512,10 @@ function convertChunkToGeminiResponse(
 
   const parts: Part[] = [];
 
+  // Only handle text content in streaming chunks
+  // Tool calls are accumulated separately and emitted when finish_reason is set
   if (delta?.content) {
     parts.push({ text: delta.content });
-  }
-
-  if (delta?.tool_calls) {
-    for (const toolCall of delta.tool_calls) {
-      if (toolCall.function) {
-        try {
-          parts.push({
-            functionCall: {
-              name: toolCall.function.name || '',
-              args: toolCall.function.arguments
-                ? JSON.parse(toolCall.function.arguments)
-                : {},
-            },
-          });
-        } catch {
-          // Partial JSON in streaming, skip
-        }
-      }
-    }
   }
 
   const candidates: Candidate[] =
