@@ -115,8 +115,95 @@ export function createOpenAICompatibleContentGenerator(
         stream_options: { include_usage: true },
       });
 
+      // Accumulate tool calls across chunks (they come in pieces during streaming)
+      const accumulatedToolCalls: Map<
+        number,
+        { name: string; arguments: string }
+      > = new Map();
+      let lastUsage: OpenAIUsage | undefined;
+
       for await (const chunk of stream) {
-        yield convertChunkToGeminiResponse(chunk);
+        const choice = chunk.choices?.[0];
+        const delta = choice?.delta;
+
+        // Accumulate tool call data
+        if (delta?.tool_calls) {
+          for (const toolCall of delta.tool_calls) {
+            const index = toolCall.index;
+            const existing = accumulatedToolCalls.get(index) || {
+              name: '',
+              arguments: '',
+            };
+
+            if (toolCall.function?.name) {
+              existing.name = toolCall.function.name;
+            }
+            if (toolCall.function?.arguments) {
+              existing.arguments += toolCall.function.arguments;
+            }
+
+            accumulatedToolCalls.set(index, existing);
+          }
+        }
+
+        // Track usage for final response
+        if (chunk.usage) {
+          lastUsage = chunk.usage as OpenAIUsage;
+        }
+
+        // Yield text content immediately (streaming text)
+        if (delta?.content) {
+          yield convertChunkToGeminiResponse(chunk);
+        }
+
+        // When finish_reason is set, emit accumulated tool calls
+        if (
+          choice?.finish_reason === 'tool_calls' &&
+          accumulatedToolCalls.size > 0
+        ) {
+          const parts: Part[] = [];
+
+          for (const [, toolCall] of accumulatedToolCalls) {
+            try {
+              parts.push({
+                functionCall: {
+                  name: toolCall.name,
+                  args: JSON.parse(toolCall.arguments),
+                },
+              });
+            } catch (e) {
+              // Log parsing error for debugging
+              console.error(
+                `Failed to parse tool call arguments: ${toolCall.arguments}`,
+                e,
+              );
+            }
+          }
+
+          if (parts.length > 0) {
+            const candidates: Candidate[] = [
+              {
+                content: { role: 'model', parts },
+                finishReason: FinishReason.STOP,
+                avgLogprobs: 0,
+              },
+            ];
+
+            const response = new GenerateContentResponse();
+            response.candidates = candidates;
+
+            if (lastUsage) {
+              const usageMetadata = new GenerateContentResponseUsageMetadata();
+              usageMetadata.promptTokenCount = lastUsage.prompt_tokens || 0;
+              usageMetadata.candidatesTokenCount =
+                lastUsage.completion_tokens || 0;
+              usageMetadata.totalTokenCount = lastUsage.total_tokens || 0;
+              response.usageMetadata = usageMetadata;
+            }
+
+            yield response;
+          }
+        }
       }
     } catch (error) {
       throw convertError(error);
