@@ -24,6 +24,7 @@ import { FakeContentGenerator } from './fakeContentGenerator.js';
 import { parseCustomHeaders } from '../utils/customHeaderUtils.js';
 import { RecordingContentGenerator } from './recordingContentGenerator.js';
 import { getVersion, resolveModel } from '../../index.js';
+import { getConfigManager } from '../config/config-manager.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -103,16 +104,25 @@ export async function createContentGeneratorConfig(
   const googleCloudLocation = process.env['GOOGLE_CLOUD_LOCATION'] || undefined;
 
   // OpenAI-compatible provider configuration
+  // First try environment variables, then fall back to ConfigManager
+  const configManager = getConfigManager();
+  const activeProvider = configManager.getActiveProvider();
+  const activeBaseUrl = configManager.getActiveBaseUrl();
+
   const openAICompatibleApiKey =
     process.env['OPENAI_COMPATIBLE_API_KEY'] ||
     process.env['OPENROUTER_API_KEY'] ||
+    activeProvider?.apiKey ||
     undefined;
   const openAICompatibleBaseUrl =
     process.env['OPENAI_COMPATIBLE_BASE_URL'] ||
     process.env['OPENROUTER_BASE_URL'] ||
+    activeBaseUrl ||
     undefined;
   const openAICompatibleModel =
-    process.env['OPENAI_COMPATIBLE_MODEL'] || undefined;
+    process.env['OPENAI_COMPATIBLE_MODEL'] ||
+    activeProvider?.model ||
+    undefined;
 
   const contentGeneratorConfig: ContentGeneratorConfig = {
     authType,
