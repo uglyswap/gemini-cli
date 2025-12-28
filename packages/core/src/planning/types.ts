@@ -372,6 +372,9 @@ export interface TodoManagerConfig {
   /** Enable pattern learning */
   enablePatternLearning: boolean;
 
+  /** Maximum tokens allocated for planning context (~20% of typical 100k context window) */
+  maxPlanningTokens: number;
+
   /** Context compaction settings */
   compaction: CompactionConfig;
 }
@@ -492,6 +495,7 @@ export const DEFAULT_TODO_CONFIG: TodoManagerConfig = {
   autoSaveIntervalMs: 30000, // 30 seconds
   enableMetrics: true,
   enablePatternLearning: false, // Disabled by default, can be resource intensive
+  maxPlanningTokens: 20000, // ~20% of typical 100k context window
   compaction: {
     enabled: true,
     warningThreshold: 0.8, // 80%

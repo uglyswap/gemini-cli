@@ -118,11 +118,16 @@ export class OrchestratorPlanningBridge {
 
   /**
    * Create todos from execution plan
+   * @param plan The execution plan to create todos from
+   * @param parentTodoId Optional parent todo ID to nest under (currently unused, reserved for future hierarchical plans)
    */
   createTodosFromPlan(
     plan: ExecutionPlan,
-    _mainTodoId?: string,
+    parentTodoId?: string,
   ): AgenticTodo[] {
+    // parentTodoId is reserved for future use in hierarchical execution plans
+    void parentTodoId;
+
     if (!this.options.createTodosForSteps) {
       return [];
     }
@@ -288,10 +293,13 @@ export class OrchestratorPlanningBridge {
 
     // Update work summary
     if (baseReport.success) {
+      const agentNames =
+        baseReport.agentExecutions?.map((e) => e.agentName).join(', ') ||
+        'none';
       const summary =
         `Task completed: ${baseReport.task}\n` +
         `Duration: ${baseReport.totalDurationMs}ms\n` +
-        `Agents used: ${baseReport.agentExecutions.map((e) => e.agentName).join(', ')}`;
+        `Agents used: ${agentNames}`;
       this.todoManager.appendToScratchpad(summary);
     }
 

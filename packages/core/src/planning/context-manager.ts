@@ -85,10 +85,15 @@ export class ContextManager {
 
   /**
    * Generate context injection for LLM prompts
+   * Uses compactionConfig thresholds to determine optimal token budget
    */
-  generateContextInjection(maxTokens: number = 4000): ContextInjection {
+  generateContextInjection(maxTokens?: number): ContextInjection {
+    // Use compaction config thresholds to calculate default budget
+    // This ensures we stay within safe limits before compaction is needed
+    const tokenBudget =
+      maxTokens ?? Math.floor(this.compactionConfig.warningThreshold * 8000);
     const items = this.gatherRatedContextItems();
-    const selected = this.selectItemsWithinBudget(items, maxTokens);
+    const selected = this.selectItemsWithinBudget(items, tokenBudget);
 
     const systemContext = this.formatAsXml(selected);
     const humanReadable = this.formatAsMarkdown(selected);
@@ -166,10 +171,7 @@ export class ContextManager {
         .join('; '),
       criticalDecisions: decisions.map((d) => d.decision),
       activeFiles: [...new Set(activeFiles)],
-      importantValues:
-        this.todoManager.getImportantValue('all') !== undefined
-          ? { all: this.todoManager.getImportantValue('all')! }
-          : {},
+      importantValues: this.gatherAllImportantValues(),
       blockersSummary:
         blockers.length > 0 ? blockers.join('\n') : 'No blockers',
     };
@@ -305,6 +307,18 @@ export class ContextManager {
   // ==========================================================================
 
   /**
+   * Escape special XML characters in text
+   */
+  private escapeXml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  /**
    * Format selected items as XML for system prompts
    */
   private formatAsXml(items: RatedContextItem[]): string {
@@ -316,8 +330,8 @@ export class ContextManager {
     if (todos.length > 0) {
       xml += '  <todos>\n';
       for (const todo of todos) {
-        xml += `    <todo importance="${todo.importance}">\n`;
-        xml += `      ${todo.content}\n`;
+        xml += `    <todo importance="${this.escapeXml(todo.importance)}">\n`;
+        xml += `      ${this.escapeXml(todo.content)}\n`;
         xml += '    </todo>\n';
       }
       xml += '  </todos>\n';
@@ -326,8 +340,8 @@ export class ContextManager {
     if (decisions.length > 0) {
       xml += '  <recent-decisions>\n';
       for (const decision of decisions) {
-        xml += `    <decision importance="${decision.importance}">\n`;
-        xml += `      ${decision.content}\n`;
+        xml += `    <decision importance="${this.escapeXml(decision.importance)}">\n`;
+        xml += `      ${this.escapeXml(decision.content)}\n`;
         xml += '    </decision>\n';
       }
       xml += '  </recent-decisions>\n';
@@ -350,15 +364,15 @@ export class ContextManager {
     if (todos.length > 0) {
       md += '### Tasks\n\n';
       for (const todo of todos) {
-        const icon =
+        const prefix =
           todo.importance === ContextImportance.CRITICAL
-            ? '🔴'
+            ? '[CRITICAL]'
             : todo.importance === ContextImportance.HIGH
-              ? '🟠'
+              ? '[HIGH]'
               : todo.importance === ContextImportance.MEDIUM
-                ? '🟡'
-                : '⚪';
-        md += `${icon} ${todo.content}\n`;
+                ? '[MEDIUM]'
+                : '[LOW]';
+        md += `${prefix} ${todo.content}\n`;
       }
       md += '\n';
     }
@@ -405,6 +419,17 @@ export class ContextManager {
   private estimateTokens(text: string): number {
     // Rough estimate: ~4 characters per token
     return Math.ceil(text.length / 4);
+  }
+
+  // ==========================================================================
+  // Important Values
+  // ==========================================================================
+
+  /**
+   * Gather all important values from the todo manager
+   */
+  private gatherAllImportantValues(): Record<string, string> {
+    return this.todoManager.getAllImportantValues();
   }
 
   // ==========================================================================

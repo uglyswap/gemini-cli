@@ -21,6 +21,48 @@ import type {
 } from './types.js';
 
 /**
+ * Validates that an object has required session properties
+ */
+function isValidSession(obj: unknown): obj is TodoSession {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const session = obj as Record<string, unknown>;
+  return (
+    typeof session['sessionId'] === 'string' &&
+    typeof session['version'] === 'string' &&
+    typeof session['startedAt'] === 'string' &&
+    Array.isArray(session['todos']) &&
+    typeof session['sessionContext'] === 'object' &&
+    session['sessionContext'] !== null
+  );
+}
+
+/**
+ * Validates that an object has required metrics properties
+ */
+function isValidMetrics(obj: unknown): obj is TodoMetrics {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const metrics = obj as Record<string, unknown>;
+  return (
+    typeof metrics['totalCreated'] === 'number' &&
+    typeof metrics['totalCompleted'] === 'number' &&
+    typeof metrics['totalFailed'] === 'number' &&
+    typeof metrics['completionRate'] === 'number'
+  );
+}
+
+/**
+ * Validates that an array contains valid patterns
+ */
+function isValidPatterns(arr: unknown): arr is TaskPattern[] {
+  if (!Array.isArray(arr)) return false;
+  return arr.every((item) => {
+    if (typeof item !== 'object' || item === null) return false;
+    const pattern = item as Record<string, unknown>;
+    return typeof pattern['patternId'] === 'string';
+  });
+}
+
+/**
  * File names for persistence
  */
 const FILES = {
@@ -100,7 +142,12 @@ export class TodoPersistence {
 
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content) as TodoSession;
+      const parsed = JSON.parse(content);
+      if (!isValidSession(parsed)) {
+        console.error('[TodoPersistence] Invalid session format in file');
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[TodoPersistence] Failed to load session:', error);
       return null;
@@ -159,7 +206,12 @@ export class TodoPersistence {
 
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content) as TodoSession;
+      const parsed = JSON.parse(content);
+      if (!isValidSession(parsed)) {
+        console.error('[TodoPersistence] Invalid archived session format');
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error(
         '[TodoPersistence] Failed to load archived session:',
@@ -178,11 +230,14 @@ export class TodoPersistence {
       return 0;
     }
 
-    // Sort by date (oldest first)
-    sessions.sort(
-      (a, b) =>
-        new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
-    );
+    // Sort by date (oldest first), handling 'unknown' dates
+    sessions.sort((a, b) => {
+      const dateA = new Date(a.startedAt);
+      const dateB = new Date(b.startedAt);
+      const timeA = isNaN(dateA.getTime()) ? 0 : dateA.getTime();
+      const timeB = isNaN(dateB.getTime()) ? 0 : dateB.getTime();
+      return timeA - timeB;
+    });
 
     const toDelete = sessions.slice(0, sessions.length - maxSessions);
     let deleted = 0;
@@ -227,7 +282,12 @@ export class TodoPersistence {
 
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content) as TodoMetrics;
+      const parsed = JSON.parse(content);
+      if (!isValidMetrics(parsed)) {
+        console.error('[TodoPersistence] Invalid metrics format in file');
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[TodoPersistence] Failed to load metrics:', error);
       return null;
@@ -258,7 +318,12 @@ export class TodoPersistence {
 
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content) as TaskPattern[];
+      const parsed = JSON.parse(content);
+      if (!isValidPatterns(parsed)) {
+        console.error('[TodoPersistence] Invalid patterns format in file');
+        return [];
+      }
+      return parsed;
     } catch (error) {
       console.error('[TodoPersistence] Failed to load patterns:', error);
       return [];
@@ -491,7 +556,14 @@ ${sessionContext.completedWorkSummary}
 
     try {
       const content = fs.readFileSync(inputPath, 'utf-8');
-      return JSON.parse(content) as TodoSession;
+      const parsed = JSON.parse(content);
+      if (!isValidSession(parsed)) {
+        console.error(
+          '[TodoPersistence] Invalid session format in import file',
+        );
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[TodoPersistence] Failed to import session:', error);
       return null;
@@ -578,14 +650,15 @@ export function createDefaultMetrics(): TodoMetrics {
 }
 
 /**
- * Update metrics with a completed todo
+ * Update metrics when a todo is completed or blocked
+ * Note: totalCreated should be incremented separately at todo creation time
  */
 export function updateMetricsWithTodo(
   metrics: TodoMetrics,
   todo: AgenticTodo,
 ): TodoMetrics {
   const updated = { ...metrics };
-  updated.totalCreated++;
+  // Note: totalCreated is NOT incremented here - it should be tracked at creation time
 
   if (todo.status === 'completed') {
     updated.totalCompleted++;

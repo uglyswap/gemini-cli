@@ -46,6 +46,9 @@ export class AgentSessionManager {
   private readonly reuseAgentSessions: boolean;
   private readonly defaultTools: Tool[];
   private readonly workingDirectory: string;
+  // Locking mechanism to prevent race conditions
+  private readonly sessionCreationLocks: Map<string, Promise<AgentSession>> =
+    new Map();
 
   constructor(
     private readonly config: Config,
@@ -60,9 +63,15 @@ export class AgentSessionManager {
   }
 
   /**
-   * Get or create a session for an agent
+   * Get or create a session for an agent (with locking to prevent race conditions)
    */
   async getOrCreateSession(agent: SpecializedAgent): Promise<AgentSession> {
+    // Check if there's an ongoing creation for this agent
+    const existingLock = this.sessionCreationLocks.get(agent.id);
+    if (existingLock) {
+      return existingLock;
+    }
+
     // Check if we should reuse existing session
     if (this.reuseAgentSessions) {
       const existingSessionId = this.agentToSession.get(agent.id);
@@ -77,6 +86,24 @@ export class AgentSessionManager {
       }
     }
 
+    // Create a promise that will resolve with the new session
+    const creationPromise = this.createSessionInternal(agent);
+    this.sessionCreationLocks.set(agent.id, creationPromise);
+
+    try {
+      const session = await creationPromise;
+      return session;
+    } finally {
+      this.sessionCreationLocks.delete(agent.id);
+    }
+  }
+
+  /**
+   * Internal method to create a session
+   */
+  private async createSessionInternal(
+    agent: SpecializedAgent,
+  ): Promise<AgentSession> {
     // Check session limit
     if (this.sessions.size >= this.maxConcurrentSessions) {
       await this.cleanupOldestSession();
@@ -122,8 +149,8 @@ export class AgentSessionManager {
    */
   getActiveSessions(): AgentSessionState[] {
     return Array.from(this.sessions.values())
-      .filter(session => session.getState().isActive)
-      .map(session => session.getState());
+      .filter((session) => session.getState().isActive)
+      .map((session) => session.getState());
   }
 
   /**
@@ -144,11 +171,11 @@ export class AgentSessionManager {
   /**
    * Close a specific session
    */
-  closeSession(sessionId: string): void {
+  async closeSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
       const agentId = session.getAgent().id;
-      session.close();
+      await session.close();
       this.sessions.delete(sessionId);
       this.agentToSession.delete(agentId);
     }
@@ -157,20 +184,21 @@ export class AgentSessionManager {
   /**
    * Close all sessions for an agent
    */
-  closeAgentSessions(agentId: string): void {
+  async closeAgentSessions(agentId: string): Promise<void> {
     const sessionId = this.agentToSession.get(agentId);
     if (sessionId) {
-      this.closeSession(sessionId);
+      await this.closeSession(sessionId);
     }
   }
 
   /**
    * Close all sessions
    */
-  closeAllSessions(): void {
-    for (const session of this.sessions.values()) {
-      session.close();
-    }
+  async closeAllSessions(): Promise<void> {
+    const closePromises = Array.from(this.sessions.values()).map((session) =>
+      session.close(),
+    );
+    await Promise.all(closePromises);
     this.sessions.clear();
     this.agentToSession.clear();
   }
@@ -187,13 +215,16 @@ export class AgentSessionManager {
    */
   getStats(): SessionManagerStats {
     const sessions = Array.from(this.sessions.values());
-    const activeSessions = sessions.filter(s => s.getState().isActive);
-    
+    const activeSessions = sessions.filter((s) => s.getState().isActive);
+
     return {
       totalSessions: sessions.length,
       activeSessions: activeSessions.length,
       totalTasks: sessions.reduce((sum, s) => sum + s.getState().taskCount, 0),
-      totalTokens: sessions.reduce((sum, s) => sum + s.getState().totalTokens, 0),
+      totalTokens: sessions.reduce(
+        (sum, s) => sum + s.getState().totalTokens,
+        0,
+      ),
       agentBreakdown: this.getAgentBreakdown(),
     };
   }
@@ -208,9 +239,10 @@ export class AgentSessionManager {
     for (const [sessionId, session] of this.sessions.entries()) {
       const state = session.getState();
       const lastActive = state.lastActiveAt.getTime();
-      
+
       if (now - lastActive > this.sessionTimeoutMs) {
-        this.closeSession(sessionId);
+        // Fire-and-forget cleanup - we don't need to await individual session closures
+        void this.closeSession(sessionId);
         cleaned++;
       }
     }
@@ -242,7 +274,7 @@ export class AgentSessionManager {
     for (const session of this.sessions.values()) {
       const state = session.getState();
       const lastActive = state.lastActiveAt.getTime();
-      
+
       if (lastActive < oldestTime) {
         oldestTime = lastActive;
         oldestSession = session;
@@ -250,7 +282,7 @@ export class AgentSessionManager {
     }
 
     if (oldestSession) {
-      this.closeSession(oldestSession.getState().sessionId);
+      await this.closeSession(oldestSession.getState().sessionId);
     }
   }
 

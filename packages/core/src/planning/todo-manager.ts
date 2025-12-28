@@ -167,6 +167,13 @@ export class TodoManager {
   }
 
   /**
+   * Get all important values
+   */
+  getAllImportantValues(): Record<string, string> {
+    return { ...(this.session.sessionContext.importantValues || {}) };
+  }
+
+  /**
    * Start a new session, archiving the current one
    */
   startNewSession(): void {
@@ -180,7 +187,14 @@ export class TodoManager {
     this.session = this.createNewSession(
       this.session.sessionContext.projectRoot,
     );
+    this.isDirty = false; // Reset dirty flag for new session
     this.persistence.saveSession(this.session);
+
+    // Reset auto-save timer if enabled
+    if (this.config.autoSaveIntervalMs > 0) {
+      this.startAutoSave();
+    }
+
     this.emit({ type: 'session_saved', sessionId: this.session.sessionId });
   }
 
@@ -236,6 +250,13 @@ export class TodoManager {
     this.markDirty();
     this.emit({ type: 'todo_created', todo });
 
+    // Track metrics for todo creation
+    if (this.config.enableMetrics) {
+      this.metrics.totalCreated++;
+      this.metrics.lastUpdated = new Date().toISOString();
+      this.persistence.saveMetrics(this.metrics);
+    }
+
     // Check if we're approaching limits
     if (this.session.todos.length >= this.config.maxTodosPerSession) {
       console.warn(
@@ -254,19 +275,23 @@ export class TodoManager {
   }
 
   /**
-   * Find a todo by ID
+   * Find a todo by ID (recursively searches all subtask levels)
    */
   findTodo(id: string): AgenticTodo | undefined {
-    // Search in top-level todos
-    for (const todo of this.session.todos) {
-      if (todo.id === id) return todo;
-      // Search in subtasks
-      if (todo.subtasks) {
-        const found = todo.subtasks.find((st) => st.id === id);
-        if (found) return found;
+    const searchRecursively = (
+      todos: AgenticTodo[],
+    ): AgenticTodo | undefined => {
+      for (const todo of todos) {
+        if (todo.id === id) return todo;
+        // Recursively search in subtasks
+        if (todo.subtasks && todo.subtasks.length > 0) {
+          const found = searchRecursively(todo.subtasks);
+          if (found) return found;
+        }
       }
-    }
-    return undefined;
+      return undefined;
+    };
+    return searchRecursively(this.session.todos);
   }
 
   /**
@@ -389,29 +414,48 @@ export class TodoManager {
   }
 
   /**
-   * Delete a todo
+   * Delete a todo and clean up all dependency references
    */
   deleteTodo(id: string): boolean {
-    const index = this.session.todos.findIndex((t) => t.id === id);
-    if (index !== -1) {
-      this.session.todos.splice(index, 1);
-      this.markDirty();
-      return true;
-    }
-
-    // Check subtasks
-    for (const todo of this.session.todos) {
-      if (todo.subtasks) {
-        const subIndex = todo.subtasks.findIndex((st) => st.id === id);
-        if (subIndex !== -1) {
-          todo.subtasks.splice(subIndex, 1);
-          this.markDirty();
-          return true;
+    // Recursively delete from any list of todos
+    const deleteRecursively = (todos: AgenticTodo[]): boolean => {
+      const index = todos.findIndex((t) => t.id === id);
+      if (index !== -1) {
+        todos.splice(index, 1);
+        return true;
+      }
+      // Check subtasks recursively
+      for (const todo of todos) {
+        if (todo.subtasks && todo.subtasks.length > 0) {
+          if (deleteRecursively(todo.subtasks)) {
+            return true;
+          }
         }
       }
+      return false;
+    };
+
+    const deleted = deleteRecursively(this.session.todos);
+
+    if (deleted) {
+      // Clean up dependency references in all todos
+      const cleanupDependencies = (todos: AgenticTodo[]): void => {
+        for (const todo of todos) {
+          if (todo.dependencies && todo.dependencies.length > 0) {
+            todo.dependencies = todo.dependencies.filter(
+              (depId) => depId !== id,
+            );
+          }
+          if (todo.subtasks && todo.subtasks.length > 0) {
+            cleanupDependencies(todo.subtasks);
+          }
+        }
+      };
+      cleanupDependencies(this.session.todos);
+      this.markDirty();
     }
 
-    return false;
+    return deleted;
   }
 
   // ==========================================================================
@@ -531,16 +575,19 @@ export class TodoManager {
   }
 
   /**
-   * Flatten all todos including subtasks
+   * Flatten all todos including subtasks (recursively at all levels)
    */
   private flattenTodos(): AgenticTodo[] {
     const result: AgenticTodo[] = [];
-    for (const todo of this.session.todos) {
-      result.push(todo);
-      if (todo.subtasks) {
-        result.push(...todo.subtasks);
+    const flattenRecursively = (todos: AgenticTodo[]): void => {
+      for (const todo of todos) {
+        result.push(todo);
+        if (todo.subtasks && todo.subtasks.length > 0) {
+          flattenRecursively(todo.subtasks);
+        }
       }
-    }
+    };
+    flattenRecursively(this.session.todos);
     return result;
   }
 
@@ -695,9 +742,8 @@ export class TodoManager {
       estimatedTokens += Math.ceil(decision.rationale.length / 4);
     }
 
-    // Assume context window of ~100k tokens and planning can use 20%
-    const maxPlanningTokens = 20000;
-    return Math.min(1, estimatedTokens / maxPlanningTokens);
+    // Use configured maxPlanningTokens (default: ~20% of typical 100k context window)
+    return Math.min(1, estimatedTokens / this.config.maxPlanningTokens);
   }
 
   /**
@@ -781,7 +827,7 @@ export class TodoManager {
     this.session.compactionInfo.compactionCount++;
     this.session.compactionInfo.lastCompactionAt = now;
     this.session.compactionInfo.tokensBeforeLastCompaction = Math.round(
-      beforeUsage * 20000,
+      beforeUsage * this.config.maxPlanningTokens,
     );
     this.session.compactionInfo.archivedItems.push(...archivedItems);
 
@@ -798,7 +844,7 @@ export class TodoManager {
 
     const afterUsage = this.estimateContextUsage();
     this.session.compactionInfo.tokensAfterLastCompaction = Math.round(
-      afterUsage * 20000,
+      afterUsage * this.config.maxPlanningTokens,
     );
 
     this.markDirty();

@@ -185,18 +185,33 @@ export class AgentSession {
 
   /**
    * Subscribe to session events
+   * @returns Unsubscribe function to remove the callback
    */
-  onEvent(callback: AgentSessionEventCallback): void {
+  onEvent(callback: AgentSessionEventCallback): () => void {
     this.eventCallbacks.push(callback);
+    // Return unsubscribe function
+    return () => {
+      const index = this.eventCallbacks.indexOf(callback);
+      if (index !== -1) {
+        this.eventCallbacks.splice(index, 1);
+      }
+    };
   }
 
   /**
    * Close the session and release resources
    */
-  close(): void {
+  async close(): Promise<void> {
+    if (!this.isActive) {
+      return; // Already closed
+    }
     this.isActive = false;
     this.state.isActive = false;
     this.emit({ type: 'session_closed', sessionId: this.sessionId });
+    // Clear all event callbacks to prevent memory leaks
+    this.eventCallbacks.length = 0;
+    // Clear history to release memory
+    this.history.length = 0;
   }
 
   /**
