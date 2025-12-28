@@ -20,6 +20,7 @@ import { ToolErrorType } from './tool-error.js';
 import { getErrorMessage } from '../utils/errors.js';
 import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../policy/types.js';
+import { AuthType } from '../core/contentGenerator.js';
 import { getResponseText } from '../utils/partUtils.js';
 import { fetchWithTimeout, isPrivateIp } from '../utils/fetch.js';
 import { convert } from 'html-to-text';
@@ -101,6 +102,11 @@ export interface WebFetchToolParams {
    * The prompt containing URL(s) (up to 20) and instructions for processing their content.
    */
   prompt: string;
+  /**
+   * Optional: URL to fetch (for backwards compatibility with LLMs that provide url separately)
+   * If provided and prompt doesn't contain a URL, this will be prepended to the prompt.
+   */
+  url?: string;
 }
 
 interface ErrorWithStatus extends Error {
@@ -254,6 +260,20 @@ ${textContent}
   }
 
   async execute(signal: AbortSignal): Promise<ToolResult> {
+    // Check if using OpenAI-compatible provider - web fetch requires Gemini-specific features
+    const authType = this.config.getContentGeneratorConfig()?.authType;
+    if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
+      return {
+        llmContent: `Web fetch is not available with OpenAI-compatible providers. This feature requires the Gemini API's URL context capability. To use web fetch, please authenticate with Google (Login with Google) or use a Gemini API key.`,
+        returnDisplay: 'Web fetch not available with current provider.',
+        error: {
+          message:
+            'Web fetch requires Gemini API - not available with OpenAI-compatible providers',
+          type: ToolErrorType.WEB_FETCH_PROCESSING_ERROR,
+        },
+      };
+    }
+
     const userPrompt = this.params.prompt;
     const { validUrls: urls } = parsePrompt(userPrompt);
     const url = urls[0];
@@ -417,7 +437,12 @@ export class WebFetchTool extends BaseDeclarativeTool<
         properties: {
           prompt: {
             description:
-              'A comprehensive prompt that includes the URL(s) (up to 20) to fetch and specific instructions on how to process their content (e.g., "Summarize https://example.com/article and extract key points from https://another.com/data"). All URLs to be fetched must be valid and complete, starting with "http://" or "https://", and be fully-formed with a valid hostname (e.g., a domain name like "example.com" or an IP address). For example, "https://example.com" is valid, but "example.com" is not.',
+              'Instructions on how to process the URL content (e.g., "Summarize the page", "Extract key points"). If URL is not in the prompt, use the url parameter.',
+            type: 'string',
+          },
+          url: {
+            description:
+              'The URL to fetch (must start with http:// or https://). Can alternatively be included directly in the prompt parameter.',
             type: 'string',
           },
         },
@@ -437,7 +462,19 @@ export class WebFetchTool extends BaseDeclarativeTool<
       return "The 'prompt' parameter cannot be empty and must contain URL(s) and instructions.";
     }
 
-    const { validUrls, errors } = parsePrompt(params.prompt);
+    // Check if prompt contains URLs
+    let { validUrls, errors } = parsePrompt(params.prompt);
+
+    // If no URLs in prompt but url parameter is provided, combine them
+    if (validUrls.length === 0 && params.url) {
+      const urlResult = parsePrompt(params.url);
+      if (urlResult.validUrls.length > 0) {
+        // Prepend URL to prompt for processing
+        params.prompt = `${params.url} ${params.prompt}`;
+        validUrls = urlResult.validUrls;
+        errors = urlResult.errors;
+      }
+    }
 
     if (errors.length > 0) {
       return `Error(s) in prompt URLs:\n- ${errors.join('\n- ')}`;

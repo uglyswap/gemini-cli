@@ -14,6 +14,7 @@ import { ToolErrorType } from './tool-error.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { type Config } from '../config/config.js';
 import { getResponseText } from '../utils/partUtils.js';
+import { AuthType } from '../core/contentGenerator.js';
 
 interface GroundingChunkWeb {
   uri?: string;
@@ -76,6 +77,20 @@ class WebSearchToolInvocation extends BaseToolInvocation<
   }
 
   async execute(signal: AbortSignal): Promise<WebSearchToolResult> {
+    // Check if using OpenAI-compatible provider - web search requires Gemini-specific features
+    const authType = this.config.getContentGeneratorConfig()?.authType;
+    if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
+      return {
+        llmContent: `Web search is not available with OpenAI-compatible providers. This feature requires the Gemini API's search grounding capability. To use web search, please authenticate with Google (Login with Google) or use a Gemini API key.`,
+        returnDisplay: 'Web search not available with current provider.',
+        error: {
+          message:
+            'Web search requires Gemini API - not available with OpenAI-compatible providers',
+          type: ToolErrorType.WEB_SEARCH_FAILED,
+        },
+      };
+    }
+
     const geminiClient = this.config.getGeminiClient();
 
     try {
