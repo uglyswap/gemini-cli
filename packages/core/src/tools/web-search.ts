@@ -376,14 +376,99 @@ Provide a well-structured answer based on these search results.`;
     }
   }
 
+  /**
+   * Check if the model has native web search capability
+   */
+  private hasNativeWebSearch(model: string, baseUrl: string): boolean {
+    const modelLower = model.toLowerCase();
+
+    // OpenRouter :online models have built-in web search
+    if (baseUrl.includes('openrouter.ai') && modelLower.includes(':online')) {
+      return true;
+    }
+
+    // Perplexity models have native web search
+    if (
+      baseUrl.includes('perplexity.ai') ||
+      modelLower.includes('perplexity') ||
+      modelLower.startsWith('pplx-')
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Execute web search using model's native capability (for :online models, Perplexity, etc.)
+   */
+  private async executeNativeModelSearch(
+    _signal: AbortSignal,
+  ): Promise<WebSearchToolResult> {
+    try {
+      const contentGenerator = this.config.getContentGenerator();
+
+      const response = await contentGenerator.generateContent(
+        {
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Search the web for: ${this.params.query}\n\nProvide a comprehensive answer based on current web information. Include sources with URLs when available.`,
+                },
+              ],
+            },
+          ],
+          config: {
+            temperature: 0,
+            maxOutputTokens: 4000,
+          },
+        },
+        'web-search-native',
+      );
+
+      const responseText = getResponseText(response);
+
+      if (!responseText?.trim()) {
+        return {
+          llmContent: `No search results found for query: "${this.params.query}"`,
+          returnDisplay: 'No information found.',
+        };
+      }
+
+      return {
+        llmContent: `Web search results for "${this.params.query}":\n\n${responseText}`,
+        returnDisplay: `Search results for "${this.params.query}" returned.`,
+      };
+    } catch (error: unknown) {
+      const errorMessage = `Error during native model web search for query "${this.params.query}": ${getErrorMessage(error)}`;
+      console.error(errorMessage, error);
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `Error performing web search.`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.WEB_SEARCH_FAILED,
+        },
+      };
+    }
+  }
+
   async execute(signal: AbortSignal): Promise<WebSearchToolResult> {
     // Check if using OpenAI-compatible provider
     const authType = this.config.getContentGeneratorConfig()?.authType;
     if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
-      const baseUrl =
-        this.config.getContentGeneratorConfig()?.openAICompatibleBaseUrl || '';
+      const contentConfig = this.config.getContentGeneratorConfig();
+      const baseUrl = contentConfig?.openAICompatibleBaseUrl || '';
+      const model = contentConfig?.openAICompatibleModel || '';
 
-      // OpenRouter supports web search via their plugin
+      // Check if model has native web search (e.g., :online models, Perplexity)
+      if (this.hasNativeWebSearch(model, baseUrl)) {
+        return this.executeNativeModelSearch(signal);
+      }
+
+      // OpenRouter without :online model: use web plugin
       if (baseUrl.includes('openrouter.ai')) {
         return this.executeOpenRouterSearch(signal);
       }
