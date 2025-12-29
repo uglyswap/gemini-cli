@@ -29,7 +29,12 @@ export interface ReadFileToolParams {
   /**
    * The path to the file to read
    */
-  file_path: string;
+  file_path?: string;
+
+  /**
+   * Alias for file_path (some models prefer this simpler name)
+   */
+  path?: string;
 
   /**
    * The line number to start reading from (optional)
@@ -40,6 +45,16 @@ export interface ReadFileToolParams {
    * The number of lines to read (optional)
    */
   limit?: number;
+}
+
+/**
+ * Normalizes params by converting 'path' to 'file_path' if needed
+ */
+function normalizeReadFileParams(
+  params: ReadFileToolParams,
+): ReadFileToolParams & { file_path: string } {
+  const filePath = params.file_path || params.path || '';
+  return { ...params, file_path: filePath };
 }
 
 class ReadFileToolInvocation extends BaseToolInvocation<
@@ -54,7 +69,8 @@ class ReadFileToolInvocation extends BaseToolInvocation<
     _toolName?: string,
     _toolDisplayName?: string,
   ) {
-    super(params, messageBus, _toolName, _toolDisplayName);
+    const normalizedParams = normalizeReadFileParams(params);
+    super(normalizedParams, messageBus, _toolName, _toolDisplayName);
     this.resolvedPath = path.resolve(
       this.config.getTargetDir(),
       this.params.file_path,
@@ -162,6 +178,10 @@ export class ReadFileTool extends BaseDeclarativeTool<
             description: 'The path to the file to read.',
             type: 'string',
           },
+          path: {
+            description: 'Alias for file_path. Use either file_path or path.',
+            type: 'string',
+          },
           offset: {
             description:
               "Optional: For text files, the 0-based line number to start reading from. Requires 'limit' to be set. Use for paginating through large files.",
@@ -173,7 +193,7 @@ export class ReadFileTool extends BaseDeclarativeTool<
             type: 'number',
           },
         },
-        required: ['file_path'],
+        required: [],
         type: 'object',
       },
       true,
@@ -185,15 +205,17 @@ export class ReadFileTool extends BaseDeclarativeTool<
   protected override validateToolParamValues(
     params: ReadFileToolParams,
   ): string | null {
-    if (params.file_path.trim() === '') {
-      return "The 'file_path' parameter must be non-empty.";
+    const filePath = params.file_path || params.path;
+    if (!filePath || filePath.trim() === '') {
+      return "Either 'file_path' or 'path' parameter must be provided and non-empty.";
     }
 
     const workspaceContext = this.config.getWorkspaceContext();
     const projectTempDir = this.config.storage.getProjectTempDir();
+    const normalizedFilePath = params.file_path || params.path || '';
     const resolvedPath = path.resolve(
       this.config.getTargetDir(),
-      params.file_path,
+      normalizedFilePath,
     );
     const resolvedProjectTempDir = path.resolve(projectTempDir);
     const isWithinTempDir =

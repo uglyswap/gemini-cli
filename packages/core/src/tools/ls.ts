@@ -23,7 +23,12 @@ export interface LSToolParams {
   /**
    * The absolute path to the directory to list
    */
-  dir_path: string;
+  dir_path?: string;
+
+  /**
+   * Alias for dir_path (some models prefer this simpler name)
+   */
+  path?: string;
 
   /**
    * Array of glob patterns to ignore (optional)
@@ -69,6 +74,16 @@ export interface FileEntry {
   modifiedTime: Date;
 }
 
+/**
+ * Normalizes params by converting 'path' to 'dir_path' if needed
+ */
+function normalizeLSParams(
+  params: LSToolParams,
+): LSToolParams & { dir_path: string } {
+  const dirPath = params.dir_path || params.path || '';
+  return { ...params, dir_path: dirPath };
+}
+
 class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
   constructor(
     private readonly config: Config,
@@ -77,7 +92,8 @@ class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
     _toolName?: string,
     _toolDisplayName?: string,
   ) {
-    super(params, messageBus, _toolName, _toolDisplayName);
+    const normalizedParams = normalizeLSParams(params);
+    super(normalizedParams, messageBus, _toolName, _toolDisplayName);
   }
 
   /**
@@ -272,6 +288,10 @@ export class LSTool extends BaseDeclarativeTool<LSToolParams, ToolResult> {
             description: 'The path to the directory to list',
             type: 'string',
           },
+          path: {
+            description: 'Alias for dir_path. Use either dir_path or path.',
+            type: 'string',
+          },
           ignore: {
             description: 'List of glob patterns to ignore',
             items: {
@@ -297,7 +317,7 @@ export class LSTool extends BaseDeclarativeTool<LSToolParams, ToolResult> {
             },
           },
         },
-        required: ['dir_path'],
+        required: [],
         type: 'object',
       },
       true,
@@ -314,10 +334,11 @@ export class LSTool extends BaseDeclarativeTool<LSToolParams, ToolResult> {
   protected override validateToolParamValues(
     params: LSToolParams,
   ): string | null {
-    const resolvedPath = path.resolve(
-      this.config.getTargetDir(),
-      params.dir_path,
-    );
+    const dirPath = params.dir_path || params.path;
+    if (!dirPath || dirPath.trim() === '') {
+      return "Either 'dir_path' or 'path' parameter must be provided and non-empty.";
+    }
+    const resolvedPath = path.resolve(this.config.getTargetDir(), dirPath);
     const workspaceContext = this.config.getWorkspaceContext();
     if (!workspaceContext.isPathWithinWorkspace(resolvedPath)) {
       const directories = workspaceContext.getDirectories();
