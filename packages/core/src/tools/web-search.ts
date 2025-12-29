@@ -74,6 +74,15 @@ interface OpenRouterResponse {
 }
 
 /**
+ * DuckDuckGo search result
+ */
+interface DuckDuckGoResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+/**
  * Parameters for the WebSearchTool.
  */
 export interface WebSearchToolParams {
@@ -220,6 +229,153 @@ class WebSearchToolInvocation extends BaseToolInvocation<
     }
   }
 
+  /**
+   * Parse DuckDuckGo HTML results
+   */
+  private parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
+    const results: DuckDuckGoResult[] = [];
+
+    // Match result blocks - DuckDuckGo uses class="result results_links results_links_deep web-result"
+    const resultRegex =
+      /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([^<]*(?:<[^>]*>[^<]*)*)<\/a>/gi;
+
+    let match;
+    while ((match = resultRegex.exec(html)) !== null && results.length < 8) {
+      const url = match[1] || '';
+      const title = (match[2] || '').trim();
+      // Clean HTML tags from snippet
+      const snippet = (match[3] || '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+
+      if (url && title) {
+        // DuckDuckGo uses redirect URLs, extract the actual URL
+        const actualUrlMatch = url.match(/uddg=([^&]*)/);
+        const actualUrl = actualUrlMatch
+          ? decodeURIComponent(actualUrlMatch[1])
+          : url;
+
+        results.push({ title, url: actualUrl, snippet });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Execute web search using DuckDuckGo (no API key required)
+   */
+  private async executeDuckDuckGoSearch(
+    signal: AbortSignal,
+  ): Promise<WebSearchToolResult> {
+    try {
+      // Fetch DuckDuckGo HTML results
+      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(this.params.query)}`;
+
+      const htmlResponse = await retryWithBackoff(
+        async () => {
+          const res = await fetch(searchUrl, {
+            method: 'GET',
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept:
+                'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+            },
+            signal,
+          });
+
+          if (!res.ok) {
+            throw new Error(`DuckDuckGo search failed: ${res.status}`);
+          }
+
+          return res.text();
+        },
+        {
+          retryFetchErrors: this.config.getRetryFetchErrors(),
+        },
+      );
+
+      const searchResults = this.parseDuckDuckGoHtml(htmlResponse);
+
+      if (searchResults.length === 0) {
+        return {
+          llmContent: `No search results found for query: "${this.params.query}"`,
+          returnDisplay: 'No information found.',
+        };
+      }
+
+      // Format results for the LLM
+      const sources: GroundingChunkItem[] = [];
+      const sourceListFormatted: string[] = [];
+      const resultsText = searchResults
+        .map((result, index) => {
+          sources.push({
+            web: {
+              uri: result.url,
+              title: result.title,
+            },
+          });
+          sourceListFormatted.push(
+            `[${index + 1}] ${result.title} (${result.url})`,
+          );
+          return `[${index + 1}] ${result.title}\n${result.snippet}\nURL: ${result.url}`;
+        })
+        .join('\n\n');
+
+      // Use the configured LLM to synthesize results
+      const contentGenerator = this.config.getContentGenerator();
+      const synthesisPrompt = `Based on the following web search results for "${this.params.query}", provide a comprehensive and accurate answer. Cite sources using [1], [2], etc.
+
+Search Results:
+${resultsText}
+
+Provide a well-structured answer based on these search results.`;
+
+      const synthesisResponse = await contentGenerator.generateContent(
+        {
+          contents: [{ role: 'user', parts: [{ text: synthesisPrompt }] }],
+          config: {
+            temperature: 0,
+            maxOutputTokens: 2000,
+          },
+        },
+        'web-search-synthesis',
+      );
+
+      let responseText = getResponseText(synthesisResponse) || resultsText;
+
+      // Add sources
+      if (sourceListFormatted.length > 0) {
+        responseText += '\n\nSources:\n' + sourceListFormatted.join('\n');
+      }
+
+      return {
+        llmContent: `Web search results for "${this.params.query}":\n\n${responseText}`,
+        returnDisplay: `Search results for "${this.params.query}" returned.`,
+        sources,
+      };
+    } catch (error: unknown) {
+      const errorMessage = `Error during DuckDuckGo web search for query "${this.params.query}": ${getErrorMessage(error)}`;
+      console.error(errorMessage, error);
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `Error performing web search.`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.WEB_SEARCH_FAILED,
+        },
+      };
+    }
+  }
+
   async execute(signal: AbortSignal): Promise<WebSearchToolResult> {
     // Check if using OpenAI-compatible provider
     const authType = this.config.getContentGeneratorConfig()?.authType;
@@ -232,16 +388,8 @@ class WebSearchToolInvocation extends BaseToolInvocation<
         return this.executeOpenRouterSearch(signal);
       }
 
-      // Other OpenAI-compatible providers don't support web search
-      return {
-        llmContent: `Web search is not available with this OpenAI-compatible provider. This feature is currently only supported with Gemini API or OpenRouter. To use web search, please authenticate with Google, use a Gemini API key, or configure OpenRouter.`,
-        returnDisplay: 'Web search not available with current provider.',
-        error: {
-          message:
-            'Web search not available - use Gemini API or OpenRouter instead',
-          type: ToolErrorType.WEB_SEARCH_FAILED,
-        },
-      };
+      // Other OpenAI-compatible providers: use DuckDuckGo as fallback
+      return this.executeDuckDuckGoSearch(signal);
     }
 
     const geminiClient = this.config.getGeminiClient();
