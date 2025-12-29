@@ -23,6 +23,31 @@ import type {
 } from './types.js';
 
 /**
+ * Domain-based initial trust levels
+ * Different domains have different risk profiles, so they start at different trust levels:
+ * - Security: L1_SUPERVISED (highest risk, needs most oversight)
+ * - Database: L1_SUPERVISED (data integrity critical)
+ * - Backend: L2_GUIDED (moderate risk)
+ * - Frontend: L2_GUIDED (moderate risk)
+ * - AI-ML: L2_GUIDED (moderate risk)
+ * - Testing: L3_TRUSTED (lower risk, tests don't modify production code)
+ * - DevOps: L2_GUIDED (infrastructure changes need review)
+ * - Documentation: L3_TRUSTED (lowest risk, only docs changes)
+ * - General: L2_GUIDED (default for unknown domains)
+ */
+const DOMAIN_INITIAL_TRUST_LEVELS: Record<string, TrustLevel> = {
+  security: TrustLevel.L1_SUPERVISED,
+  database: TrustLevel.L1_SUPERVISED,
+  backend: TrustLevel.L2_GUIDED,
+  frontend: TrustLevel.L2_GUIDED,
+  'ai-ml': TrustLevel.L2_GUIDED,
+  testing: TrustLevel.L3_TRUSTED,
+  devops: TrustLevel.L2_GUIDED,
+  documentation: TrustLevel.L3_TRUSTED,
+  general: TrustLevel.L2_GUIDED,
+};
+
+/**
  * Default trust level configurations
  * Based on Agentic Dev System's Trust Cascade protocol
  */
@@ -194,13 +219,21 @@ export class TrustCascadeEngine {
 
   /**
    * Get the current trust level for an agent
+   * For new agents (0 executions), returns domain-based initial trust level
    */
-  calculateTrustLevel(agentId: string): TrustLevel {
+  calculateTrustLevel(agentId: string, domain?: string): TrustLevel {
     const metrics = this.getMetrics(agentId);
 
     // Check for quarantine triggers first
     if (this.shouldQuarantine(metrics)) {
       return TrustLevel.L0_QUARANTINE;
+    }
+
+    // For new agents with no execution history, use domain-based initial trust level
+    if (metrics.totalExecutions === 0) {
+      return this.getInitialTrustLevel(
+        domain || this.extractDomainFromAgentId(agentId),
+      );
     }
 
     const successRate =
@@ -218,6 +251,47 @@ export class TrustCascadeEngine {
     }
 
     return TrustLevel.L1_SUPERVISED;
+  }
+
+  /**
+   * Get the initial trust level for a domain
+   * Different domains have different risk profiles
+   */
+  getInitialTrustLevel(domain: string): TrustLevel {
+    return (
+      DOMAIN_INITIAL_TRUST_LEVELS[domain.toLowerCase()] ?? TrustLevel.L2_GUIDED
+    );
+  }
+
+  /**
+   * Extract domain from agent ID (e.g., "security-auditor" -> "security")
+   * Falls back to 'general' if domain cannot be determined
+   */
+  private extractDomainFromAgentId(agentId: string): string {
+    // Common domain prefixes in agent IDs
+    const domainPrefixes = [
+      'security',
+      'database',
+      'backend',
+      'frontend',
+      'ai-ml',
+      'testing',
+      'devops',
+      'documentation',
+      'general',
+    ];
+
+    const lowerAgentId = agentId.toLowerCase();
+    for (const prefix of domainPrefixes) {
+      if (
+        lowerAgentId.startsWith(prefix) ||
+        lowerAgentId.includes(`-${prefix}`)
+      ) {
+        return prefix;
+      }
+    }
+
+    return 'general';
   }
 
   /**
@@ -594,5 +668,5 @@ export class TrustCascadeEngine {
   }
 }
 
-// Export default level configs for reference
-export { DEFAULT_LEVEL_CONFIGS };
+// Export default level configs and domain trust levels for reference
+export { DEFAULT_LEVEL_CONFIGS, DOMAIN_INITIAL_TRUST_LEVELS };

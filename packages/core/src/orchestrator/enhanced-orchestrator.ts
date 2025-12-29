@@ -13,6 +13,9 @@ import type {
   PhaseCallback,
   ApprovalCallback,
   ParallelExecutionGroup,
+  OrchestratorEvent,
+  OrchestratorEventCallback,
+  OrchestratorEventType,
 } from './types.js';
 import { ExecutionMode } from './types.js';
 import { TrustCascadeEngine } from '../trust/trust-engine.js';
@@ -65,6 +68,7 @@ export class EnhancedAgentOrchestrator {
   private currentPhase: ExecutionPhase = 'INIT';
   private phaseCallbacks: PhaseCallback[] = [];
   private approvalCallbacks: ApprovalCallback[] = [];
+  private eventCallbacks: OrchestratorEventCallback[] = [];
   private sessionEventUnsubscribe: (() => void) | null = null;
 
   constructor(
@@ -147,6 +151,33 @@ export class EnhancedAgentOrchestrator {
   }
 
   /**
+   * Emit an orchestrator event to all registered callbacks
+   */
+  private async emitEvent(
+    type: OrchestratorEventType,
+    message: string,
+    data?: OrchestratorEvent['data'],
+  ): Promise<void> {
+    const event: OrchestratorEvent = {
+      type,
+      timestamp: new Date(),
+      message,
+      data: {
+        ...data,
+        phase: this.currentPhase,
+      },
+    };
+
+    for (const callback of this.eventCallbacks) {
+      try {
+        await callback(event);
+      } catch (error) {
+        console.error('[Orchestrator] Event callback error:', error);
+      }
+    }
+  }
+
+  /**
    * Execute a task using the 6-phase workflow
    */
   async executeTask(
@@ -154,6 +185,8 @@ export class EnhancedAgentOrchestrator {
     options?: {
       onPhaseChange?: PhaseCallback;
       onApprovalRequired?: ApprovalCallback;
+      /** Callback for streaming orchestrator events */
+      onEvent?: OrchestratorEventCallback;
     },
   ): Promise<ExecutionReport> {
     const startTime = Date.now();
@@ -171,10 +204,14 @@ export class EnhancedAgentOrchestrator {
     ) {
       this.approvalCallbacks.push(options.onApprovalRequired);
     }
+    if (options?.onEvent && !this.eventCallbacks.includes(options.onEvent)) {
+      this.eventCallbacks.push(options.onEvent);
+    }
 
     let snapshotId: string | undefined;
     let plan: ExecutionPlan | undefined;
     const agentExecutions: AgentExecution[] = [];
+    let rolledBack = false;
 
     try {
       // Phase 1: INIT - Analyze codebase and select agents
@@ -212,6 +249,9 @@ export class EnhancedAgentOrchestrator {
             false,
             'Execution cancelled by user',
             startTime,
+            undefined,
+            undefined,
+            false,
           );
         }
       }
@@ -292,12 +332,33 @@ export class EnhancedAgentOrchestrator {
         (e) => e.filesModified || [],
       );
 
+      // Emit validation start event
+      await this.emitEvent('validation_start', 'Starting validation pipeline', {
+        files: modifiedFiles,
+      });
+
       // Use FeedbackLoop to attempt automatic error correction
       const feedbackResult = await this.feedbackLoop.run(
         // Execute iteration: run validation pipeline
         async () => {
           const validationResult =
             await this.validationPipeline.run(gateWorkingDir);
+
+          // Emit validation progress for each step
+          for (const step of validationResult.steps) {
+            await this.emitEvent(
+              'validation_progress',
+              `${step.step}: ${step.passed ? 'passed' : 'failed'} (${step.issues.length} issues)`,
+              {
+                validationStep: step.step,
+                success: step.passed,
+                error: step.issues
+                  .filter((i) => i.type === 'error')
+                  .map((i) => i.message)
+                  .join('; '),
+              },
+            );
+          }
 
           // Collect all errors from validation steps
           const allErrors = validationResult.steps.flatMap((step) =>
@@ -357,6 +418,11 @@ ${frequentErrors.map((e) => `- ${e.message} (${e.occurrenceCount}x)`).join('\n')
 `
               : '';
 
+          // Generate error-specific instructions based on error categories
+          const errorCategories = new Set(errors.map((e) => e.category));
+          const errorSpecificInstructions =
+            this.generateErrorSpecificInstructions(errorCategories);
+
           const fixTask = `
 Fix the following validation errors (iteration ${iteration}/${this.feedbackLoop.getConfig().maxIterations}):
 
@@ -367,11 +433,15 @@ ${errorMemorySection}${patternWarning}
 - Previous iterations: ${context.previousIterations.length}
 - Working directory: ${context.workingDirectory}
 
-## INSTRUCTIONS
+## ERROR-SPECIFIC FIX STRATEGIES:
+${errorSpecificInstructions}
+
+## GENERAL INSTRUCTIONS
 1. Analyze each error carefully
-2. Check if similar errors appeared before and AVOID the same fix approach
-3. Apply different fix strategies if previous attempts failed
-4. Verify your changes don't introduce new errors
+2. Apply the error-specific strategies above
+3. Check if similar errors appeared before and AVOID the same fix approach
+4. Apply different fix strategies if previous attempts failed
+5. Verify your changes don't introduce new errors
           `.trim();
 
           // Re-execute relevant agents to fix errors
@@ -420,6 +490,21 @@ ${errorMemorySection}${patternWarning}
       const gateResults = await this.gateRunner.runPostGates(gateContext);
       const allGatesPassed = gateResults.passed && feedbackResult.success;
 
+      // Emit validation complete event
+      await this.emitEvent(
+        'validation_complete',
+        allGatesPassed ? 'Validation passed' : 'Validation failed',
+        {
+          success: allGatesPassed,
+          error: allGatesPassed
+            ? undefined
+            : gateResults.gates
+                .filter((g) => !g.passed)
+                .map((g) => g.message)
+                .join('; '),
+        },
+      );
+
       // Only rollback if FeedbackLoop failed AND we have a snapshot
       if (
         !allGatesPassed &&
@@ -430,13 +515,41 @@ ${errorMemorySection}${patternWarning}
           gateResults.gates,
         );
         if (shouldRollback) {
+          // Emit rollback start event
+          await this.emitEvent(
+            'rollback_start',
+            'Rolling back changes due to validation failure',
+            {
+              error: gateResults.gates
+                .filter((g) => !g.passed)
+                .map((g) => g.message)
+                .join('; '),
+            },
+          );
+
           try {
             await this.snapshotManager.restoreSnapshot(snapshotId);
+            rolledBack = true;
+
+            // Emit rollback complete event
+            await this.emitEvent(
+              'rollback_complete',
+              'Rollback completed successfully',
+              {
+                success: true,
+              },
+            );
           } catch (rollbackError) {
             console.error(
               'Rollback after validation failure failed:',
               rollbackError,
             );
+
+            // Emit rollback error event
+            await this.emitEvent('error', `Rollback failed: ${rollbackError}`, {
+              success: false,
+              error: String(rollbackError),
+            });
           }
         }
       }
@@ -455,18 +568,50 @@ ${errorMemorySection}${patternWarning}
         startTime,
         gateResults.gates,
         snapshotId,
+        rolledBack,
       );
     } catch (error) {
       // Handle unexpected errors
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
+      // Emit error event
+      await this.emitEvent('error', `Task execution failed: ${errorMessage}`, {
+        success: false,
+        error: errorMessage,
+      });
+
       // Attempt rollback on error
       if (snapshotId && this.config.enableSnapshots !== false) {
+        // Emit rollback start event
+        await this.emitEvent(
+          'rollback_start',
+          'Rolling back changes due to error',
+          {
+            error: errorMessage,
+          },
+        );
+
         try {
           await this.snapshotManager.restoreSnapshot(snapshotId);
+          rolledBack = true;
+
+          // Emit rollback complete event
+          await this.emitEvent(
+            'rollback_complete',
+            'Rollback completed successfully',
+            {
+              success: true,
+            },
+          );
         } catch (rollbackError) {
           console.error('Rollback failed:', rollbackError);
+
+          // Emit rollback error event
+          await this.emitEvent('error', `Rollback failed: ${rollbackError}`, {
+            success: false,
+            error: String(rollbackError),
+          });
         }
       }
 
@@ -477,6 +622,9 @@ ${errorMemorySection}${patternWarning}
         false,
         errorMessage,
         startTime,
+        undefined,
+        snapshotId,
+        rolledBack,
       );
     } finally {
       // Cleanup
@@ -485,6 +633,9 @@ ${errorMemorySection}${patternWarning}
       );
       this.approvalCallbacks = this.approvalCallbacks.filter(
         (cb) => cb !== options?.onApprovalRequired,
+      );
+      this.eventCallbacks = this.eventCallbacks.filter(
+        (cb) => cb !== options?.onEvent,
       );
     }
   }
@@ -545,8 +696,10 @@ ${errorMemorySection}${patternWarning}
     agents: Array<{ agent: SpecializedAgent; score: number }>,
   ): Promise<ExecutionPlan> {
     const steps = agents.map((agentInfo, index) => {
+      // Pass domain for accurate initial trust level calculation
       const trustLevel = this.trustEngine.calculateTrustLevel(
         agentInfo.agent.id,
+        agentInfo.agent.domain,
       );
       const privileges = this.trustEngine.getPrivileges(agentInfo.agent.id);
 
@@ -644,12 +797,17 @@ ${errorMemorySection}${patternWarning}
     return this.requestApproval(rollbackPlan);
   }
 
-  /** Default timeout for agent execution in milliseconds (5 minutes) */
-  private static readonly DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+  /**
+   * Default timeout for agent execution in milliseconds (2 minutes)
+   * Reduced from 5 minutes to fail faster and prevent hanging agents
+   * Can be overridden via OrchestratorConfig.agentTimeoutMs
+   */
+  private static readonly DEFAULT_AGENT_TIMEOUT_MS = 2 * 60 * 1000;
 
   /**
    * Execute a single agent with its task
    * Includes timeout protection to prevent hanging agents
+   * Emits streaming events for real-time progress updates
    */
   private async executeAgent(
     agent: SpecializedAgent,
@@ -657,7 +815,18 @@ ${errorMemorySection}${patternWarning}
     plan: ExecutionPlan,
   ): Promise<AgentExecution> {
     const startTime = Date.now();
-    const trustLevel = this.trustEngine.calculateTrustLevel(agent.id);
+    // Pass domain for accurate initial trust level calculation
+    const trustLevel = this.trustEngine.calculateTrustLevel(
+      agent.id,
+      agent.domain,
+    );
+
+    // Emit agent start event
+    await this.emitEvent('agent_start', `Starting agent: ${agent.name}`, {
+      agentId: agent.id,
+      agentName: agent.name,
+      domain: agent.domain,
+    });
 
     // Build agent-specific task prompt
     const agentTask = this.buildAgentTask(agent, task, plan);
@@ -675,6 +844,20 @@ ${errorMemorySection}${patternWarning}
         agent.id,
       );
 
+      // Emit agent complete event
+      await this.emitEvent(
+        'agent_complete',
+        `Agent ${agent.name} ${result.success ? 'completed successfully' : 'failed'}`,
+        {
+          agentId: agent.id,
+          agentName: agent.name,
+          domain: agent.domain,
+          success: result.success,
+          files: result.modifiedFiles,
+          error: result.error,
+        },
+      );
+
       return {
         agentId: agent.id,
         agentName: agent.name,
@@ -689,6 +872,19 @@ ${errorMemorySection}${patternWarning}
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+
+      // Emit agent error event
+      await this.emitEvent(
+        'error',
+        `Agent ${agent.name} error: ${errorMessage}`,
+        {
+          agentId: agent.id,
+          agentName: agent.name,
+          domain: agent.domain,
+          success: false,
+          error: errorMessage,
+        },
+      );
 
       return {
         agentId: agent.id,
@@ -806,6 +1002,83 @@ Begin your analysis and execution now.
   }
 
   /**
+   * Generate error-specific fix instructions based on error categories
+   * This improves retry success rate by providing targeted guidance
+   */
+  private generateErrorSpecificInstructions(
+    errorCategories: Set<string>,
+  ): string {
+    const instructions: string[] = [];
+
+    if (errorCategories.has('type_error')) {
+      instructions.push(`
+### TypeScript Type Errors:
+- Check for missing type imports (did you forget to import a type?)
+- Verify function signatures match expected parameters
+- Look for 'any' types that should be properly typed
+- Check for nullable types (use optional chaining ?. or null checks)
+- Ensure interfaces/types are properly exported where needed
+- Use type assertions (as TypeName) only when you're certain of the type
+- For generic types, verify all type parameters are specified
+`);
+    }
+
+    if (errorCategories.has('lint_error')) {
+      instructions.push(`
+### ESLint/Lint Errors:
+- Check for unused variables (remove or add _prefix if intentionally unused)
+- Fix inconsistent indentation/formatting (use prettier if available)
+- Remove console.log statements in production code
+- Add missing semicolons or remove extra ones (based on project style)
+- Fix import ordering (group by type: external, internal, relative)
+- Address any-type warnings by adding proper types
+- Fix missing return statements in functions
+`);
+    }
+
+    if (errorCategories.has('security_error')) {
+      instructions.push(`
+### Security Errors:
+- NEVER use eval() or Function() constructor
+- Sanitize user inputs before using in queries or commands
+- Use parameterized queries for database operations
+- Avoid hardcoded secrets - use environment variables
+- Validate and sanitize all external data
+- Use HTTPS for external API calls
+- Implement proper authentication checks before sensitive operations
+- Escape HTML output to prevent XSS
+`);
+    }
+
+    if (errorCategories.has('test_failure')) {
+      instructions.push(`
+### Test Failures:
+- Read the test assertion failure message carefully
+- Check if the expected vs actual values match
+- Verify mock setup is correct (are mocks returning expected values?)
+- Check async test timing (use await, done(), or increase timeout)
+- Ensure test fixtures/setup is complete
+- Look for order-dependent tests (tests should be independent)
+- Check if implementation logic matches test expectations
+- For snapshot tests, update snapshots if changes are intentional
+`);
+    }
+
+    if (errorCategories.has('unknown') || instructions.length === 0) {
+      instructions.push(`
+### General Error Fix Guidelines:
+- Read the error message carefully - it often tells you exactly what's wrong
+- Check the line number and surrounding context
+- Look for similar patterns in the codebase that work correctly
+- Consider if recent changes might have broken something
+- Check imports and exports are correct
+`);
+    }
+
+    return instructions.join('\n');
+  }
+
+  /**
    * Determine if an agent can help fix specific error types
    */
   private agentCanFixErrors(
@@ -861,7 +1134,11 @@ Begin your analysis and execution now.
    */
   private shouldStopOnFailure(agent: SpecializedAgent): boolean {
     // Stop on failure for supervised/guided agents
-    const trustLevel = this.trustEngine.calculateTrustLevel(agent.id);
+    // Pass domain for accurate trust level calculation
+    const trustLevel = this.trustEngine.calculateTrustLevel(
+      agent.id,
+      agent.domain,
+    );
     return (
       trustLevel === TrustLevel.L1_SUPERVISED ||
       trustLevel === TrustLevel.L2_GUIDED
@@ -950,6 +1227,7 @@ Begin your analysis and execution now.
 
   /**
    * Create the final execution report
+   * @param rolledBack - Whether a rollback was performed during execution (notifies user)
    */
   private createReport(
     task: string,
@@ -965,6 +1243,7 @@ Begin your analysis and execution now.
       message?: string;
     }>,
     snapshotId?: string,
+    rolledBack?: boolean,
   ): ExecutionReport {
     return {
       task,
@@ -980,6 +1259,7 @@ Begin your analysis and execution now.
       error,
       qualityGateResults: gateResults || [],
       snapshotId,
+      rolledBack: rolledBack ?? false,
       totalDurationMs: Date.now() - startTime,
       completedAt: new Date(),
     };

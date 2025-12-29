@@ -239,7 +239,7 @@ export interface OrchestratorConfig {
   verbose: boolean;
   /** Require approval above this trust level */
   requireApprovalAbove?: TrustLevel;
-  /** Timeout for individual agent execution in milliseconds (default: 5 minutes) */
+  /** Timeout for individual agent execution in milliseconds (default: 2 minutes) */
   agentTimeoutMs?: number;
   /** Enable diff validation after agent execution */
   enableDiffValidation: boolean;
@@ -457,3 +457,62 @@ export type ApprovalCallback = (
   agents?: AgentSpecialization[],
   context?: AgentContext,
 ) => Promise<boolean>;
+
+/**
+ * Orchestrator event types for streaming/real-time updates
+ */
+export type OrchestratorEventType =
+  | 'phase_change'
+  | 'agent_start'
+  | 'agent_progress'
+  | 'agent_complete'
+  | 'validation_start'
+  | 'validation_progress'
+  | 'validation_complete'
+  | 'rollback_start'
+  | 'rollback_complete'
+  | 'error'
+  | 'warning'
+  | 'info';
+
+/**
+ * Orchestrator event payload
+ */
+export interface OrchestratorEvent {
+  /** Event type */
+  type: OrchestratorEventType;
+  /** Timestamp of the event */
+  timestamp: Date;
+  /** Event message */
+  message: string;
+  /** Additional event data */
+  data?: {
+    /** Current phase */
+    phase?: ExecutionPhase;
+    /** Agent ID */
+    agentId?: string;
+    /** Agent name */
+    agentName?: string;
+    /** Agent domain */
+    domain?: string;
+    /** Progress percentage (0-100) */
+    progress?: number;
+    /** Success status */
+    success?: boolean;
+    /** Error message */
+    error?: string;
+    /** Files affected */
+    files?: string[];
+    /** Validation step name */
+    validationStep?: string;
+    /** Any additional data */
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * Orchestrator event callback for streaming updates
+ */
+export type OrchestratorEventCallback = (
+  event: OrchestratorEvent,
+) => void | Promise<void>;
