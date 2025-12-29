@@ -15,6 +15,7 @@ import { getErrorMessage } from '../utils/errors.js';
 import { type Config } from '../config/config.js';
 import { getResponseText } from '../utils/partUtils.js';
 import { AuthType } from '../core/contentGenerator.js';
+import { retryWithBackoff } from '../utils/retry.js';
 
 interface GroundingChunkWeb {
   uri?: string;
@@ -36,6 +37,40 @@ interface GroundingSupportItem {
   segment?: GroundingSupportSegment;
   groundingChunkIndices?: number[];
   confidenceScores?: number[]; // Optional as per example
+}
+
+/**
+ * OpenRouter web search annotation format
+ */
+interface OpenRouterAnnotation {
+  type: 'url_citation';
+  url_citation: {
+    url: string;
+    title: string;
+    start_index: number;
+    end_index: number;
+  };
+}
+
+interface OpenRouterMessage {
+  role: string;
+  content: string;
+  annotations?: OpenRouterAnnotation[];
+}
+
+interface OpenRouterChoice {
+  message: OpenRouterMessage;
+  finish_reason: string;
+}
+
+interface OpenRouterResponse {
+  id: string;
+  choices: OpenRouterChoice[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 /**
@@ -76,16 +111,134 @@ class WebSearchToolInvocation extends BaseToolInvocation<
     return `Searching the web for: "${this.params.query}"`;
   }
 
+  /**
+   * Execute web search using OpenRouter's web plugin
+   */
+  private async executeOpenRouterSearch(
+    signal: AbortSignal,
+  ): Promise<WebSearchToolResult> {
+    const contentConfig = this.config.getContentGeneratorConfig();
+    const baseUrl = contentConfig?.openAICompatibleBaseUrl || '';
+    const apiKey = contentConfig?.apiKey || '';
+    const model = contentConfig?.openAICompatibleModel || 'openai/gpt-4o-mini';
+
+    try {
+      const response = await retryWithBackoff(
+        async () => {
+          const res = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+              'HTTP-Referer': 'https://github.com/google-gemini/gemini-cli',
+              'X-Title': 'Devora CLI (Web Search)',
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: 'user',
+                  content: `Search the web for: ${this.params.query}\n\nProvide a comprehensive answer based on the search results. Include relevant sources.`,
+                },
+              ],
+              plugins: [{ id: 'web', max_results: 5 }],
+              temperature: 0,
+            }),
+            signal,
+          });
+
+          if (!res.ok) {
+            const errorBody = await res.text();
+            throw new Error(
+              `OpenRouter API error: ${res.status} - ${errorBody}`,
+            );
+          }
+
+          return res.json() as Promise<OpenRouterResponse>;
+        },
+        {
+          retryFetchErrors: this.config.getRetryFetchErrors(),
+        },
+      );
+
+      const choice = response.choices?.[0];
+      const message = choice?.message;
+
+      if (!message?.content?.trim()) {
+        return {
+          llmContent: `No search results found for query: "${this.params.query}"`,
+          returnDisplay: 'No information found.',
+        };
+      }
+
+      let responseText = message.content;
+      const sources: GroundingChunkItem[] = [];
+      const sourceListFormatted: string[] = [];
+
+      // Process annotations (citations from web search)
+      if (message.annotations && message.annotations.length > 0) {
+        const urlCitations = message.annotations.filter(
+          (a) => a.type === 'url_citation',
+        );
+
+        // Build sources list
+        urlCitations.forEach((annotation, index) => {
+          const citation = annotation.url_citation;
+          sources.push({
+            web: {
+              uri: citation.url,
+              title: citation.title,
+            },
+          });
+          sourceListFormatted.push(
+            `[${index + 1}] ${citation.title} (${citation.url})`,
+          );
+        });
+
+        // Add sources section if we have any
+        if (sourceListFormatted.length > 0) {
+          responseText += '\n\nSources:\n' + sourceListFormatted.join('\n');
+        }
+      }
+
+      return {
+        llmContent: `Web search results for "${this.params.query}":\n\n${responseText}`,
+        returnDisplay: `Search results for "${this.params.query}" returned.`,
+        sources,
+      };
+    } catch (error: unknown) {
+      const errorMessage = `Error during OpenRouter web search for query "${this.params.query}": ${getErrorMessage(error)}`;
+      console.error(errorMessage, error);
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `Error performing web search.`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.WEB_SEARCH_FAILED,
+        },
+      };
+    }
+  }
+
   async execute(signal: AbortSignal): Promise<WebSearchToolResult> {
-    // Check if using OpenAI-compatible provider - web search requires Gemini-specific features
+    // Check if using OpenAI-compatible provider
     const authType = this.config.getContentGeneratorConfig()?.authType;
     if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
+      const baseUrl =
+        this.config.getContentGeneratorConfig()?.openAICompatibleBaseUrl || '';
+
+      // OpenRouter supports web search via their plugin
+      if (baseUrl.includes('openrouter.ai')) {
+        return this.executeOpenRouterSearch(signal);
+      }
+
+      // Other OpenAI-compatible providers don't support web search
       return {
-        llmContent: `Web search is not available with OpenAI-compatible providers. This feature requires the Gemini API's search grounding capability. To use web search, please authenticate with Google (Login with Google) or use a Gemini API key.`,
+        llmContent: `Web search is not available with this OpenAI-compatible provider. This feature is currently only supported with Gemini API or OpenRouter. To use web search, please authenticate with Google, use a Gemini API key, or configure OpenRouter.`,
         returnDisplay: 'Web search not available with current provider.',
         error: {
           message:
-            'Web search requires Gemini API - not available with OpenAI-compatible providers',
+            'Web search not available - use Gemini API or OpenRouter instead',
           type: ToolErrorType.WEB_SEARCH_FAILED,
         },
       };
