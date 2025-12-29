@@ -533,6 +533,40 @@ export class ErrorMemory {
   }
 
   /**
+   * Get recent errors from memory (for prompt context)
+   * Returns the most recently seen error patterns
+   */
+  getRecentErrors(limit: number = 5): Array<{
+    id: string;
+    category: ErrorCategory;
+    message: string;
+    file?: string;
+    line?: number;
+    occurrenceCount: number;
+  }> {
+    // Sort patterns by lastSeen (most recent first)
+    const sorted = [...this.patterns.values()]
+      .sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime())
+      .slice(0, limit);
+
+    return sorted.map((pattern) => ({
+      id: pattern.id,
+      category: pattern.category,
+      // Extract a readable message from the pattern
+      message: pattern.messagePattern
+        .replace(/\\\\/g, '\\')
+        .replace(/\\d\+/g, 'N')
+        .replace(/\[\\^\\s\]\+/g, '[path]')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')'),
+      file: pattern.filePattern
+        ? pattern.filePattern.replace(/\\\\/g, '\\').split('.*')[0]
+        : undefined,
+      occurrenceCount: pattern.occurrences,
+    }));
+  }
+
+  /**
    * Get memory statistics
    */
   getStats(): MemoryStats {

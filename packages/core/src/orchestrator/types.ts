@@ -245,6 +245,8 @@ export interface OrchestratorConfig {
   enableDiffValidation: boolean;
   /** Maximum retry iterations for the feedback loop (default: 5) */
   maxRetryIterations?: number;
+  /** Enable test validation in the validation pipeline (default: false) */
+  enableTests?: boolean;
   /** Model configuration */
   modelConfig: {
     fastModel: string;

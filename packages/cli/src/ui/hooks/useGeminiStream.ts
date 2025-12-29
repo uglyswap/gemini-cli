@@ -265,34 +265,118 @@ export const useGeminiStream = (
       const agentsEnabled = config.isAgentsEnabled?.() ?? true;
       if (!agentsEnabled) return false;
 
-      // Filter out conversational/general questions that shouldn't use orchestration
-      // These should go through the regular LLM flow for natural responses
+      // Smart filtering using technical score instead of binary pattern matching
+      // This prevents blocking legitimate short technical requests like "Fix bug in auth.ts"
       const lower = taskDescription.toLowerCase().trim();
+
+      // Technical keywords that indicate a real coding task
+      const technicalKeywords = [
+        // File operations
+        'file',
+        'code',
+        'function',
+        'class',
+        'method',
+        'variable',
+        'import',
+        'export',
+        // Actions
+        'create',
+        'add',
+        'implement',
+        'fix',
+        'bug',
+        'error',
+        'refactor',
+        'update',
+        'modify',
+        'change',
+        'delete',
+        'remove',
+        'move',
+        'rename',
+        'optimize',
+        'improve',
+        'build',
+        'run',
+        'test',
+        'debug',
+        // Technical terms
+        'api',
+        'endpoint',
+        'component',
+        'module',
+        'package',
+        'dependency',
+        'config',
+        'database',
+        'schema',
+        'migration',
+        'deploy',
+        'docker',
+        'typescript',
+        'javascript',
+        'react',
+        'node',
+        // File extensions and paths
+        '.ts',
+        '.tsx',
+        '.js',
+        '.jsx',
+        '.json',
+        '.css',
+        '.md',
+        '.yaml',
+        '.yml',
+        'src/',
+        'lib/',
+        // French equivalents
+        'fichier',
+        'créer',
+        'ajouter',
+        'corriger',
+        'erreur',
+        'réparer',
+        'modifier',
+        'supprimer',
+      ];
+
+      // Calculate technical score
+      const techScore = technicalKeywords.filter((keyword) =>
+        lower.includes(keyword),
+      ).length;
+
+      // Conversational patterns that suggest non-technical queries
       const conversationalPatterns = [
         // Explanations and questions about the system
-        /^(explique|explain|qu'est-ce que|what is|comment (ça |ca )?fonctionne|how does|how do you|tell me about|describe)/i,
+        /^(explique|explain|qu'est-ce que|what is|comment (ça |ca )?fonctionne|how does|how do you|tell me about|describe)\s/i,
         // General greetings and meta questions
-        /^(bonjour|hello|hi|salut|hey|merci|thanks|thank you)/i,
-        // Questions about capabilities
-        /^(peux-tu|can you|could you|are you able|es-tu capable)/i,
-        // Help requests
-        /^(aide|help|assist)/i,
+        /^(bonjour|hello|hi|salut|hey|merci|thanks|thank you)(\s|$)/i,
+        // Questions about capabilities (without specific task)
+        /^(peux-tu|can you|could you|are you able|es-tu capable)\s+(m'|me\s+)?(expliquer|explain|dire|tell)/i,
         // Questions about the agent/system itself
         /(ton système|your system|toi-même|yourself|tes capacités|your capabilities|qui es-tu|who are you)/i,
-        // Very short queries (likely conversational)
       ];
 
       // Check if query matches conversational patterns
-      const isConversational = conversationalPatterns.some((pattern) =>
+      const matchesConversational = conversationalPatterns.some((pattern) =>
         pattern.test(lower),
       );
 
-      // Also filter very short queries (< 20 chars) as they're likely conversational
-      const isTooShort = taskDescription.trim().length < 20;
+      // Decision logic:
+      // 1. If techScore >= 2, always use orchestration (clearly technical)
+      // 2. If techScore >= 1 and length >= 15, use orchestration (likely technical)
+      // 3. If conversational pattern and techScore < 2, skip orchestration
+      // 4. If very short (< 10 chars) and no tech keywords, skip orchestration
 
-      if (isConversational || isTooShort) {
+      const taskLength = taskDescription.trim().length;
+      const isLikelyTechnical =
+        techScore >= 2 || (techScore >= 1 && taskLength >= 15);
+      const isTooShort = taskLength < 10 && techScore === 0;
+
+      if (!isLikelyTechnical && (matchesConversational || isTooShort)) {
         debugLogger.log(
-          `[Orchestrator] Skipping orchestration for conversational/short query: "${taskDescription.slice(0, 50)}..."`,
+          `[Orchestrator] Skipping orchestration: techScore=${techScore}, conversational=${matchesConversational}, length=${taskLength}`,
         );
         return false;
       }
@@ -301,14 +385,21 @@ export const useGeminiStream = (
       const selection = agentSelector.selectAgents(taskDescription);
 
       // Use orchestration if specialized agents matched with sufficient confidence
-      // Require higher score threshold for orchestration to avoid false positives
-      const minOrchestratorScore = 15; // Higher threshold for orchestration
-      const hasHighConfidenceMatch = selection.agents.some((agent) => {
-        const score = selection.scores.get(agent.id) || 0;
-        return score >= minOrchestratorScore;
-      });
+      // Decision based on: agents selected + task complexity (not arbitrary score threshold)
+      // This aligns with AgentSelector's minScoreThreshold (default: 5)
+      const hasSpecializedAgents = selection.agents.length > 0;
+      const isComplexTask = selection.complexity !== 'simple';
 
-      if (selection.agents.length > 0 && hasHighConfidenceMatch) {
+      // Also check if best agent has good confidence (score >= 10)
+      const bestAgentScore =
+        selection.agents.length > 0
+          ? Math.max(
+              ...selection.agents.map((a) => selection.scores.get(a.id) || 0),
+            )
+          : 0;
+      const hasGoodConfidence = bestAgentScore >= 10;
+
+      if (hasSpecializedAgents && (isComplexTask || hasGoodConfidence)) {
         debugLogger.log(
           `[Orchestrator] Task matched ${selection.agents.length} agent(s): ` +
             selection.agents.map((a) => a.name).join(', ') +

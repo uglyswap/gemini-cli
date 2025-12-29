@@ -116,7 +116,8 @@ export class EnhancedAgentOrchestrator {
       enableTypeCheck: true,
       enableLint: true,
       enableSecurity: true,
-      enableTests: false, // Tests run separately
+      // enableTests is now configurable via orchestratorConfig (default: false for backwards compatibility)
+      enableTests: orchestratorConfig.enableTests ?? false,
     });
     this.feedbackLoop = new FeedbackLoop({
       maxIterations: orchestratorConfig.maxRetryIterations || 5,
@@ -334,13 +335,43 @@ export class EnhancedAgentOrchestrator {
             )
             .join('\n');
 
+          // Get recent errors from ErrorMemory to avoid repeating the same mistakes
+          const recentErrors = this.errorMemory.getRecentErrors(5);
+          const errorMemorySection =
+            recentErrors.length > 0
+              ? `
+## PREVIOUS ERRORS (learn from these - do NOT repeat the same mistakes):
+${recentErrors.map((e) => `- [${e.category}] ${e.file || 'unknown'}:${e.line || '?'}: ${e.message} (occurred ${e.occurrenceCount}x)`).join('\n')}
+`
+              : '';
+
+          // Get error patterns that keep occurring
+          const frequentErrors = recentErrors.filter(
+            (e) => e.occurrenceCount > 1,
+          );
+          const patternWarning =
+            frequentErrors.length > 0
+              ? `
+⚠️ WARNING: The following errors have occurred multiple times. Pay special attention to fix them differently:
+${frequentErrors.map((e) => `- ${e.message} (${e.occurrenceCount}x)`).join('\n')}
+`
+              : '';
+
           const fixTask = `
 Fix the following validation errors (iteration ${iteration}/${this.feedbackLoop.getConfig().maxIterations}):
 
+## CURRENT ERRORS TO FIX:
 ${errorSummary}
+${errorMemorySection}${patternWarning}
+## CONTEXT
+- Previous iterations: ${context.previousIterations.length}
+- Working directory: ${context.workingDirectory}
 
-Previous iterations: ${context.previousIterations.length}
-Please analyze and fix these errors.
+## INSTRUCTIONS
+1. Analyze each error carefully
+2. Check if similar errors appeared before and AVOID the same fix approach
+3. Apply different fix strategies if previous attempts failed
+4. Verify your changes don't introduce new errors
           `.trim();
 
           // Re-execute relevant agents to fix errors

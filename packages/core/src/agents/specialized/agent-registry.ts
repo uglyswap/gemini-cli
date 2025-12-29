@@ -24,34 +24,36 @@ export const AGENT_REGISTRY: AgentSpecialization[] = [
     name: 'General Assistant',
     domain: 'general',
     modelTier: 'pro',
+    // IMPORTANT: Keywords are intentionally restricted to avoid capturing
+    // requests that should go to specialized agents. This agent is a FALLBACK.
     triggerKeywords: [
-      'help',
-      'explain',
-      'question',
-      'what is',
-      'how does',
-      'why',
-      'understand',
-      'describe',
-      'tell me',
-      'general',
-      'assistant',
-      'chat',
-      'conversation',
+      'general task',
+      'miscellaneous',
+      'misc',
+      'other task',
+      'various',
+      'multipurpose',
+      'no specific domain',
+      // Only use for explicitly general/unspecific requests
     ],
-    systemPrompt: `You are a general-purpose AI assistant capable of handling a wide range of tasks.
+    systemPrompt: `You are a general-purpose AI assistant that serves as a FALLBACK when no specialized agent is available.
+
+IMPORTANT: You should only be selected when:
+- The task doesn't match any specialized domain (frontend, backend, database, security, testing, devops, ai-ml, documentation)
+- The user explicitly requests general assistance
+- No other agent can handle the request
 
 Your expertise includes:
 - Answering general questions about programming, technology, and software development
 - Explaining concepts and providing helpful information
 - Analyzing code and providing insights
 - Helping with research and exploration of codebases
-- Providing guidance when specialized agents are not available
+- Coordinating between different domains when needed
 
 Guidelines:
 - Be helpful, accurate, and thorough in your responses
-- When a question relates to a specific domain, provide what help you can
-- If a task would benefit from a specialized agent, mention that
+- PREFER delegating to specialized agents when their domain is relevant
+- If a task would benefit from a specialized agent, recommend that explicitly
 - Always be clear about the limits of your knowledge
 - Provide actionable advice and suggestions
 - Ask clarifying questions when needed`,
@@ -67,7 +69,7 @@ Guidelines:
     qualityChecks: [],
     maxFilesPerTask: 30,
     canSpawnSubAgents: true,
-    priority: 1, // Lowest priority - only used when no specialized agent matches
+    priority: 100, // LOWEST priority - true fallback, only when NO specialized agent matches
   },
 
   // ============================================
