@@ -10,7 +10,8 @@ import process from 'node:process';
 import { mcpCommand } from '../commands/mcp.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { hooksCommand } from '../commands/hooks.js';
-import {
+import type {
+ ExtensionEvents ,
   Config,
   setGeminiMdFilename as setServerGeminiMdFilename,
   getCurrentGeminiMdFilename,
@@ -35,8 +36,7 @@ import {
   getConfigManager,
   type HookDefinition,
   type HookEventName,
-  type OutputFormat,
-} from '@google/gemini-cli-core';
+  type OutputFormat } from '@google/gemini-cli-core';
 import type { Settings } from './settings.js';
 import { saveModelChange, loadSettings } from './settings.js';
 
@@ -48,7 +48,6 @@ import { RESUME_LATEST } from '../utils/sessionUtils.js';
 import { isWorkspaceTrusted } from './trustedFolders.js';
 import { createPolicyEngineConfig } from './policy.js';
 import { ExtensionManager } from './extension-manager.js';
-import type { ExtensionEvents } from '@google/gemini-cli-core/src/utils/extensionLoader.js';
 import { requestConsentNonInteractive } from './extensions/consent.js';
 import { promptForSetting } from './extensions/extensionSettings.js';
 import type { EventEmitter } from 'node:stream';

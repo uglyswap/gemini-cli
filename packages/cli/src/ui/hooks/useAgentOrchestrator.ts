@@ -5,21 +5,17 @@
  */
 
 import { useState, useRef, useCallback, useMemo } from 'react';
-import type { Config } from '@google/gemini-cli-core';
-
-// Import orchestration components directly from source until core is properly compiled
-// TODO: Replace with '@google/gemini-cli-core' imports once core build issues are resolved
-import { AgentSelector } from '@google/gemini-cli-core/src/agents/specialized/agent-selector.js';
-import type { AgentSelectionResult } from '@google/gemini-cli-core/src/agents/specialized/types.js';
-import {
-  HybridModeManager,
-  DEFAULT_HYBRID_CONFIG,
-} from '@google/gemini-cli-core/src/hybrid/hybrid-mode-manager.js';
-import type {
+import type { Config ,
+  AgentSelectionResult,
   ExecutionReport,
   ExecutionPhase,
   ExecutionPlan,
-} from '@google/gemini-cli-core/src/orchestrator/types.js';
+} from '@google/gemini-cli-core';
+import {
+  AgentSelector,
+  HybridModeManager,
+  DEFAULT_HYBRID_CONFIG,
+} from '@google/gemini-cli-core';
 
 /**
  * Configuration for orchestrator behavior
@@ -204,9 +200,7 @@ export const useAgentOrchestrator = (
             ? async (planOrTask) => {
                 // Extract ExecutionPlan if it has the 'task' property
                 if ('task' in planOrTask) {
-                  return options.onApprovalRequired!(
-                    planOrTask,
-                  );
+                  return options.onApprovalRequired!(planOrTask);
                 }
                 // For OrchestratorTask, create a minimal ExecutionPlan
                 return options.onApprovalRequired!({

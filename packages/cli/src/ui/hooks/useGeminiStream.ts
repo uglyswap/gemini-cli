@@ -16,7 +16,7 @@ import type {
   ThoughtSummary,
   ToolCallRequestInfo,
   GeminiErrorEventValue,
-} from '@google/gemini-cli-core';
+ ExecutionPhase, ExecutionReport } from '@google/gemini-cli-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -39,16 +39,9 @@ import {
   EDIT_TOOL_NAMES,
   processRestorableToolCalls,
   recordToolCallInteractions,
+  AgentSelector,
+  HybridModeManager,
 } from '@google/gemini-cli-core';
-
-// Import orchestration components directly from source until core is properly compiled
-// TODO: Replace with '@google/gemini-cli-core' imports once core build issues are resolved
-import { AgentSelector } from '@google/gemini-cli-core/src/agents/specialized/agent-selector.js';
-import { HybridModeManager } from '@google/gemini-cli-core/src/hybrid/hybrid-mode-manager.js';
-import type {
-  ExecutionPhase,
-  ExecutionReport,
-} from '@google/gemini-cli-core/src/orchestrator/types.js';
 import { type Part, type PartListUnion, FinishReason } from '@google/genai';
 import type {
   HistoryItem,
