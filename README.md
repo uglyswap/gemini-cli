@@ -4,7 +4,7 @@
 
 ```
 ══════════════════════════════════════════════════
-██████╗ ███████╗██╗   ██╗ ██████╗ ██████╗  █████╗ 
+██████╗ ███████╗██╗   ██╗ ██████╗ ██████╗  █████╗
 ██╔══██╗██╔════╝██║   ██║██╔═══██╗██╔══██╗██╔══██╗
 ██║  ██║█████╗  ██║   ██║██║   ██║██████╔╝███████║
 ██║  ██║██╔══╝  ╚██╗ ██╔╝██║   ██║██╔══██╗██╔══██║
@@ -30,6 +30,7 @@
 - ✅ **LM Studio support** for local models
 - ✅ **12 pre-configured providers** with dynamic model fetching
 - ✅ Streaming and function/tool calling support
+- ✅ **Automatic agent routing** - Complex tasks automatically delegated to specialized agents
 
 ## 🚀 Quick Start
 
@@ -129,11 +130,11 @@ devora
 
 | Variable                     | Required | Description         |
 | ---------------------------- | -------- | ------------------- |
-| `OPENAI_COMPATIBLE_BASE_URL` | Yes*     | API endpoint URL    |
-| `OPENAI_COMPATIBLE_API_KEY`  | Yes*     | API key             |
+| `OPENAI_COMPATIBLE_BASE_URL` | Yes\*    | API endpoint URL    |
+| `OPENAI_COMPATIBLE_API_KEY`  | Yes\*    | API key             |
 | `OPENAI_COMPATIBLE_MODEL`    | No       | Override model name |
 
-*Required only when using OpenAI-compatible providers.
+\*Required only when using OpenAI-compatible providers.
 
 ## 📦 Installation
 
@@ -180,6 +181,22 @@ DEVORA includes an **enhanced multi-agent orchestration system** that's **enable
 ### What is Agentic Mode?
 
 Agentic mode uses **28 specialized AI agents** organized into **8 domain teams** that work together to complete complex tasks.
+
+### 🔄 Automatic Routing
+
+When you send a message, DEVORA **automatically analyzes** your query and routes it to the appropriate specialized agents:
+
+```
+You: "Create a React component with authentication"
+     ↓
+🔍 AgentSelector analyzes keywords → matches Frontend + Security agents
+     ↓
+🤖 HybridModeManager orchestrates multi-agent execution
+     ↓
+📊 ExecutionReport shows agent contributions and results
+```
+
+**No manual intervention needed** - just describe your task naturally!
 
 ### 🏗️ Agent Teams
 
