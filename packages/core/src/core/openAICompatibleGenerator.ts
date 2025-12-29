@@ -100,6 +100,9 @@ export function createOpenAICompatibleContentGenerator(
     },
   });
 
+  // Debug logging for OpenAI-compatible providers (set DEBUG_OPENAI_COMPAT=true)
+  const DEBUG = process.env['DEBUG_OPENAI_COMPAT'] === 'true';
+
   async function* doGenerateContentStream(
     request: GenerateContentParameters,
   ): AsyncGenerator<GenerateContentResponse> {
@@ -132,17 +135,13 @@ export function createOpenAICompatibleContentGenerator(
       > = new Map();
       let lastUsage: OpenAIUsage | undefined;
 
-      // Debug logging for OpenAI-compatible providers
-      const DEBUG_OPENAI_COMPAT =
-        process.env['DEBUG_OPENAI_COMPAT'] === 'true';
-
       for await (const chunk of stream) {
         const choice = chunk.choices?.[0];
         const delta = choice?.delta;
 
-        if (DEBUG_OPENAI_COMPAT) {
+        if (DEBUG) {
           console.error(
-            '[DEBUG] Chunk:',
+            '[DEBUG STREAM] Chunk:',
             JSON.stringify({
               finish_reason: choice?.finish_reason,
               delta_content: delta?.content?.substring(0, 100),
@@ -189,9 +188,9 @@ export function createOpenAICompatibleContentGenerator(
           (finishReason === 'end_turn' && accumulatedToolCalls.size > 0) ||
           (finishReason === 'stop' && accumulatedToolCalls.size > 0);
 
-        if (DEBUG_OPENAI_COMPAT && choice?.finish_reason) {
+        if (DEBUG && choice?.finish_reason) {
           console.error(
-            '[DEBUG] Finish reason:',
+            '[DEBUG STREAM] Finish reason:',
             choice.finish_reason,
             'Accumulated tools:',
             accumulatedToolCalls.size,
@@ -284,9 +283,21 @@ export function createOpenAICompatibleContentGenerator(
       try {
         const messages = convertToOpenAIFormat(request);
         const systemInstruction = extractSystemInstruction(request);
+        const requestModel = request.model || modelName;
+        const wantsJson =
+          request.config?.responseMimeType === 'application/json';
+
+        if (DEBUG) {
+          console.error('[DEBUG NON-STREAM] Request:', {
+            model: requestModel,
+            wantsJson,
+            messageCount: messages.length,
+            hasSystemInstruction: !!systemInstruction,
+          });
+        }
 
         const completion = await client.chat.completions.create({
-          model: request.model || modelName,
+          model: requestModel,
           messages: systemInstruction
             ? [{ role: 'system', content: systemInstruction }, ...messages]
             : messages,
@@ -294,12 +305,51 @@ export function createOpenAICompatibleContentGenerator(
           top_p: request.config?.topP,
           max_tokens: request.config?.maxOutputTokens || 20000,
           tools: convertTools(request.config?.tools),
-          response_format:
-            request.config?.responseMimeType === 'application/json'
-              ? { type: 'json_object' }
-              : undefined,
+          response_format: wantsJson ? { type: 'json_object' } : undefined,
           stream: false,
         });
+
+        const choice = completion.choices[0];
+
+        if (DEBUG) {
+          console.error('[DEBUG NON-STREAM] Response:', {
+            finishReason: choice?.finish_reason,
+            hasContent: !!choice?.message?.content,
+            contentLength: choice?.message?.content?.length || 0,
+            contentPreview: choice?.message?.content?.slice(0, 200),
+            hasToolCalls: !!choice?.message?.tool_calls?.length,
+            refusal: choice?.message?.refusal,
+          });
+        }
+
+        // Handle empty content - some providers return null/undefined content
+        if (!choice?.message?.content && !choice?.message?.tool_calls?.length) {
+          // Check if model refused the request
+          if (choice?.message?.refusal) {
+            throw new Error(`Model refused request: ${choice.message.refusal}`);
+          }
+          // For JSON requests with empty content, return empty JSON object
+          if (wantsJson) {
+            if (DEBUG) {
+              console.error(
+                '[DEBUG NON-STREAM] Empty content for JSON request, returning {}',
+              );
+            }
+            // Create a response with empty JSON
+            const emptyResponse = new GenerateContentResponse();
+            emptyResponse.candidates = [
+              {
+                content: {
+                  role: 'model',
+                  parts: [{ text: '{}' }],
+                },
+                finishReason: mapFinishReason(choice?.finish_reason),
+                avgLogprobs: 0,
+              },
+            ];
+            return emptyResponse;
+          }
+        }
 
         return convertToGeminiResponse(
           completion as OpenAI.Chat.ChatCompletion,
@@ -476,7 +526,7 @@ function convertToOpenAIFormat(
         .join('\n');
 
       return {
-        role: (role === 'user' ? 'user' : 'assistant'),
+        role: role === 'user' ? 'user' : 'assistant',
         content: text,
       };
     })
