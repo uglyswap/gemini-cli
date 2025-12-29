@@ -469,14 +469,26 @@ function convertTools(
   const functionDeclarations = (firstTool as GenaiTool).functionDeclarations;
   if (!functionDeclarations) return undefined;
 
-  return functionDeclarations.map((func) => ({
-    type: 'function' as const,
-    function: {
-      name: func.name || '',
-      description: func.description,
-      parameters: (func.parameters || {}) as Record<string, unknown>,
-    },
-  }));
+  return functionDeclarations.map((func) => {
+    // Ensure parameters is a valid JSON Schema object
+    // OpenRouter/Anthropic require at minimum { type: "object", properties: {} }
+    let parameters = func.parameters as Record<string, unknown> | undefined;
+    if (!parameters || Object.keys(parameters).length === 0) {
+      parameters = { type: 'object', properties: {} };
+    } else if (!parameters['type']) {
+      // If parameters exist but no type, wrap in object schema
+      parameters = { type: 'object', properties: parameters };
+    }
+
+    return {
+      type: 'function' as const,
+      function: {
+        name: func.name || '',
+        description: func.description,
+        parameters,
+      },
+    };
+  });
 }
 
 function convertToGeminiResponse(
