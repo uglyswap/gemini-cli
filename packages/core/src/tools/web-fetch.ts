@@ -213,6 +213,101 @@ ${textContent}
     }
   }
 
+  /**
+   * Fallback for OpenAI-compatible providers - fetch URL and use configured LLM
+   */
+  private async executeOpenAICompatibleFallback(
+    _signal: AbortSignal,
+  ): Promise<ToolResult> {
+    const { validUrls: urls } = parsePrompt(this.params.prompt);
+    let url = urls[0];
+
+    // Convert GitHub blob URL to raw URL
+    if (url.includes('github.com') && url.includes('/blob/')) {
+      url = url
+        .replace('github.com', 'raw.githubusercontent.com')
+        .replace('/blob/', '/');
+    }
+
+    try {
+      const response = await retryWithBackoff(
+        async () => {
+          const res = await fetchWithTimeout(url, URL_FETCH_TIMEOUT_MS);
+          if (!res.ok) {
+            const error = new Error(
+              `Request failed with status code ${res.status} ${res.statusText}`,
+            );
+            (error as ErrorWithStatus).status = res.status;
+            throw error;
+          }
+          return res;
+        },
+        {
+          retryFetchErrors: this.config.getRetryFetchErrors(),
+        },
+      );
+
+      const rawContent = await response.text();
+      const contentType = response.headers.get('content-type') || '';
+      let textContent: string;
+
+      // Only use html-to-text if content type is HTML
+      if (
+        contentType.toLowerCase().includes('text/html') ||
+        contentType === ''
+      ) {
+        textContent = convert(rawContent, {
+          wordwrap: false,
+          selectors: [
+            { selector: 'a', options: { ignoreHref: true } },
+            { selector: 'img', format: 'skip' },
+          ],
+        });
+      } else {
+        textContent = rawContent;
+      }
+
+      textContent = textContent.substring(0, MAX_CONTENT_LENGTH);
+
+      // Use the configured content generator instead of Gemini client
+      const contentGenerator = this.config.getContentGenerator();
+      const fallbackPrompt = `The user requested the following: "${this.params.prompt}".
+
+Here is the content fetched from the URL. Please use it to answer the request:
+
+---
+${textContent}
+---
+`;
+      const result = await contentGenerator.generateContent(
+        {
+          contents: [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
+          config: {
+            temperature: 0,
+            maxOutputTokens: 4000,
+          },
+        },
+        'web-fetch-fallback',
+      );
+      const resultText = getResponseText(result) || '';
+      return {
+        llmContent: resultText,
+        returnDisplay: `Content for ${url} processed.`,
+      };
+    } catch (e) {
+      const error = e as Error;
+      const errorMessage = `Error during web fetch for ${url}: ${error.message}`;
+      return {
+        llmContent: `Error: ${errorMessage}`,
+        returnDisplay: `Error: ${errorMessage}`,
+        error: {
+          message: errorMessage,
+          type: ToolErrorType.WEB_FETCH_FALLBACK_FAILED,
+        },
+      };
+    }
+  }
+
   getDescription(): string {
     const displayPrompt =
       this.params.prompt.length > 100
@@ -260,18 +355,10 @@ ${textContent}
   }
 
   async execute(signal: AbortSignal): Promise<ToolResult> {
-    // Check if using OpenAI-compatible provider - web fetch requires Gemini-specific features
+    // Check if using OpenAI-compatible provider - use HTTP fetch + LLM fallback
     const authType = this.config.getContentGeneratorConfig()?.authType;
     if (authType === AuthType.USE_OPENAI_COMPATIBLE) {
-      return {
-        llmContent: `Web fetch is not available with OpenAI-compatible providers. This feature requires the Gemini API's URL context capability. To use web fetch, please authenticate with Google (Login with Google) or use a Gemini API key.`,
-        returnDisplay: 'Web fetch not available with current provider.',
-        error: {
-          message:
-            'Web fetch requires Gemini API - not available with OpenAI-compatible providers',
-          type: ToolErrorType.WEB_FETCH_PROCESSING_ERROR,
-        },
-      };
+      return this.executeOpenAICompatibleFallback(signal);
     }
 
     const userPrompt = this.params.prompt;
