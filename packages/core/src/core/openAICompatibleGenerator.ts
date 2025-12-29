@@ -201,8 +201,12 @@ export function createOpenAICompatibleContentGenerator(
           const parts: Part[] = [];
 
           for (const [, toolCall] of accumulatedToolCalls) {
-            // Skip tool calls without a name or with empty arguments
-            if (!toolCall.name || !toolCall.arguments.trim()) {
+            // Skip tool calls without a name or with invalid arguments
+            if (
+              !toolCall.name ||
+              !toolCall.arguments.trim() ||
+              toolCall.arguments === 'undefined'
+            ) {
               continue;
             }
 
@@ -584,10 +588,24 @@ function convertToGeminiResponse(
   if (message?.tool_calls) {
     for (const toolCall of message.tool_calls) {
       if (toolCall.function) {
+        // Safely parse tool call arguments - handle undefined, empty, or invalid JSON
+        let args: Record<string, unknown> = {};
+        const rawArgs = toolCall.function.arguments;
+        if (rawArgs && rawArgs !== 'undefined' && rawArgs.trim()) {
+          try {
+            args = JSON.parse(rawArgs);
+          } catch {
+            // If parsing fails, try to use as-is or empty object
+            console.error(
+              `[OpenAI Compat] Failed to parse tool call arguments: ${rawArgs}`,
+            );
+            args = {};
+          }
+        }
         parts.push({
           functionCall: {
             name: toolCall.function.name,
-            args: JSON.parse(toolCall.function.arguments),
+            args,
           },
         });
       }
