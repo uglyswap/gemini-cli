@@ -168,3 +168,12 @@ export * from './hooks/types.js';
 // Export stdio utils
 export * from './utils/stdio.js';
 export * from './utils/terminal.js';
+
+// Export specialized agents registry
+export { AGENT_REGISTRY } from './agents/specialized/agent-registry.js';
+export type {
+  AgentSpecialization,
+  SpecializedAgent,
+  AgentDomain,
+  ModelTier,
+} from './agents/specialized/types.js';

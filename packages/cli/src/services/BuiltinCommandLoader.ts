@@ -43,6 +43,7 @@ import { vimCommand } from '../ui/commands/vimCommand.js';
 import { setupGithubCommand } from '../ui/commands/setupGithubCommand.js';
 import { terminalSetupCommand } from '../ui/commands/terminalSetupCommand.js';
 import { providerCommand } from '../ui/commands/providerCommand.js';
+import { agenticCommand } from '../ui/commands/agenticCommand.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -97,6 +98,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       setupGithubCommand,
       terminalSetupCommand,
       providerCommand,
+      agenticCommand,
     ];
     handle?.end();
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);

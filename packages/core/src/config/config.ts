@@ -527,7 +527,7 @@ export class Config {
     this.bugCommand = params.bugCommand;
     this.model = params.model;
     this._activeModel = params.model;
-    this.enableAgents = params.enableAgents ?? false;
+    this.enableAgents = params.enableAgents ?? true;
     this.experimentalJitContext = params.experimentalJitContext ?? false;
     this.modelAvailabilityService = new ModelAvailabilityService();
     this.previewFeatures = params.previewFeatures ?? undefined;
