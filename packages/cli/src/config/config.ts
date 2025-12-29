@@ -10,8 +10,7 @@ import process from 'node:process';
 import { mcpCommand } from '../commands/mcp.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { hooksCommand } from '../commands/hooks.js';
-import type {
- ExtensionEvents ,
+import {
   Config,
   setGeminiMdFilename as setServerGeminiMdFilename,
   getCurrentGeminiMdFilename,
@@ -34,9 +33,13 @@ import type {
   getVersion,
   PREVIEW_GEMINI_MODEL_AUTO,
   getConfigManager,
-  type HookDefinition,
-  type HookEventName,
-  type OutputFormat } from '@google/gemini-cli-core';
+} from '@google/gemini-cli-core';
+import type {
+  ExtensionEvents,
+  HookDefinition,
+  HookEventName,
+  OutputFormat,
+} from '@google/gemini-cli-core';
 import type { Settings } from './settings.js';
 import { saveModelChange, loadSettings } from './settings.js';
 

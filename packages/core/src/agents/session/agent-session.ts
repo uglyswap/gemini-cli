@@ -415,11 +415,13 @@ ${this.agent.systemPrompt}
 Quality Expectations:
 ${this.agent.qualityChecks.map((check) => `- ${check}`).join('\n')}
 
-IMPORTANT:
-- Focus ONLY on tasks within your domain of expertise
+GUIDELINES:
+- Your primary expertise is in your domain, but you should still try to help with related tasks
 - Be thorough and follow best practices
 - Report any issues or concerns clearly
-- Do not attempt tasks outside your specialization
+- If a task is completely outside your capabilities, explain what you CAN help with instead
+- Always provide useful, actionable responses - never just say "this is outside my domain"
+- When asked general questions, answer them helpfully based on your knowledge
 `.trim();
 
     return baseContext;

@@ -16,7 +16,9 @@ import type {
   ThoughtSummary,
   ToolCallRequestInfo,
   GeminiErrorEventValue,
- ExecutionPhase, ExecutionReport } from '@google/gemini-cli-core';
+  ExecutionPhase,
+  ExecutionReport,
+} from '@google/gemini-cli-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -263,11 +265,50 @@ export const useGeminiStream = (
       const agentsEnabled = config.isAgentsEnabled?.() ?? true;
       if (!agentsEnabled) return false;
 
+      // Filter out conversational/general questions that shouldn't use orchestration
+      // These should go through the regular LLM flow for natural responses
+      const lower = taskDescription.toLowerCase().trim();
+      const conversationalPatterns = [
+        // Explanations and questions about the system
+        /^(explique|explain|qu'est-ce que|what is|comment (ça |ca )?fonctionne|how does|how do you|tell me about|describe)/i,
+        // General greetings and meta questions
+        /^(bonjour|hello|hi|salut|hey|merci|thanks|thank you)/i,
+        // Questions about capabilities
+        /^(peux-tu|can you|could you|are you able|es-tu capable)/i,
+        // Help requests
+        /^(aide|help|assist)/i,
+        // Questions about the agent/system itself
+        /(ton système|your system|toi-même|yourself|tes capacités|your capabilities|qui es-tu|who are you)/i,
+        // Very short queries (likely conversational)
+      ];
+
+      // Check if query matches conversational patterns
+      const isConversational = conversationalPatterns.some((pattern) =>
+        pattern.test(lower),
+      );
+
+      // Also filter very short queries (< 20 chars) as they're likely conversational
+      const isTooShort = taskDescription.trim().length < 20;
+
+      if (isConversational || isTooShort) {
+        debugLogger.log(
+          `[Orchestrator] Skipping orchestration for conversational/short query: "${taskDescription.slice(0, 50)}..."`,
+        );
+        return false;
+      }
+
       // Analyze task complexity and agent matching
       const selection = agentSelector.selectAgents(taskDescription);
 
-      // Use orchestration if specialized agents matched
-      if (selection.agents.length > 0) {
+      // Use orchestration if specialized agents matched with sufficient confidence
+      // Require higher score threshold for orchestration to avoid false positives
+      const minOrchestratorScore = 15; // Higher threshold for orchestration
+      const hasHighConfidenceMatch = selection.agents.some((agent) => {
+        const score = selection.scores.get(agent.id) || 0;
+        return score >= minOrchestratorScore;
+      });
+
+      if (selection.agents.length > 0 && hasHighConfidenceMatch) {
         debugLogger.log(
           `[Orchestrator] Task matched ${selection.agents.length} agent(s): ` +
             selection.agents.map((a) => a.name).join(', ') +
