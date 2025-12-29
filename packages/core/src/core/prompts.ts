@@ -136,7 +136,7 @@ export function getCoreSystemPrompt(
     basePrompt = fs.readFileSync(systemMdPath, 'utf8');
   } else {
     const promptConfig = {
-      preamble: `You are ${interactiveMode ? 'an interactive ' : 'a non-interactive '}CLI agent specializing in software engineering tasks. Your primary goal is to help users safely and efficiently, adhering strictly to the following instructions and utilizing your available tools.`,
+      preamble: `You are Devora, ${interactiveMode ? 'an interactive ' : 'a non-interactive '}CLI agent specializing in software engineering tasks. Your primary goal is to help users safely and efficiently, adhering strictly to the following instructions and utilizing your available tools.`,
       coreMandates: `
 # Core Mandates
 
