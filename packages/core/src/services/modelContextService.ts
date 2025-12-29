@@ -185,6 +185,249 @@ async function fetchOpenRouterModels(
 }
 
 /**
+ * Fetch models from OpenAI-compatible API (generic)
+ * Works with: OpenAI, Groq, Together, Mistral, DeepSeek, LM Studio, etc.
+ */
+async function fetchOpenAICompatibleModels(
+  baseUrl: string,
+  apiKey?: string,
+  knownLimits?: Record<string, number>,
+): Promise<Record<string, ModelInfo>> {
+  const models: Record<string, ModelInfo> = {};
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(`${baseUrl}/models`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      return models;
+    }
+
+    const data = (await response.json()) as {
+      data?: Array<{
+        id: string;
+        context_length?: number;
+        context_window?: number; // Mistral uses this
+        max_context_length?: number; // Some providers use this
+      }>;
+      // Together AI returns array directly
+      object?: string;
+    };
+
+    const modelList = data.data || (Array.isArray(data) ? data : []);
+
+    for (const model of modelList) {
+      if (!model.id) continue;
+
+      // Try to get context length from various fields
+      const contextLength =
+        model.context_length ||
+        model.context_window ||
+        model.max_context_length ||
+        knownLimits?.[model.id] ||
+        KNOWN_CONTEXT_LIMITS[model.id];
+
+      if (contextLength) {
+        models[model.id] = {
+          id: model.id,
+          contextLength,
+        };
+      }
+    }
+  } catch {
+    // API might not be reachable
+  }
+
+  return models;
+}
+
+/**
+ * Fetch models from Mistral API (has context_window field)
+ */
+async function fetchMistralModels(
+  apiKey?: string,
+): Promise<Record<string, ModelInfo>> {
+  const models: Record<string, ModelInfo> = {};
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch('https://api.mistral.ai/v1/models', {
+      headers,
+    });
+
+    if (!response.ok) {
+      return models;
+    }
+
+    const data = (await response.json()) as {
+      data: Array<{
+        id: string;
+        max_context_length?: number;
+      }>;
+    };
+
+    // Mistral known limits
+    const MISTRAL_LIMITS: Record<string, number> = {
+      'mistral-large-latest': 128_000,
+      'mistral-large-2411': 128_000,
+      'mistral-medium-latest': 32_000,
+      'mistral-small-latest': 32_000,
+      'codestral-latest': 32_000,
+      'open-mistral-7b': 32_000,
+      'open-mixtral-8x7b': 32_000,
+      'open-mixtral-8x22b': 64_000,
+      'pixtral-12b-2409': 128_000,
+      'ministral-8b-latest': 128_000,
+      'ministral-3b-latest': 128_000,
+    };
+
+    for (const model of data.data || []) {
+      const contextLength =
+        model.max_context_length || MISTRAL_LIMITS[model.id] || 32_000;
+      models[model.id] = {
+        id: model.id,
+        contextLength,
+      };
+    }
+  } catch {
+    // API not reachable
+  }
+
+  return models;
+}
+
+/**
+ * Fetch models from Together AI (has context_length field)
+ */
+async function fetchTogetherModels(
+  apiKey?: string,
+): Promise<Record<string, ModelInfo>> {
+  const models: Record<string, ModelInfo> = {};
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch('https://api.together.xyz/v1/models', {
+      headers,
+    });
+
+    if (!response.ok) {
+      return models;
+    }
+
+    const data = (await response.json()) as Array<{
+      id: string;
+      context_length?: number;
+    }>;
+
+    for (const model of data || []) {
+      if (model.context_length) {
+        models[model.id] = {
+          id: model.id,
+          contextLength: model.context_length,
+        };
+      }
+    }
+  } catch {
+    // API not reachable
+  }
+
+  return models;
+}
+
+/**
+ * Fetch models from Groq API
+ */
+async function fetchGroqModels(
+  apiKey?: string,
+): Promise<Record<string, ModelInfo>> {
+  // Groq known context limits
+  const GROQ_LIMITS: Record<string, number> = {
+    'llama-3.3-70b-versatile': 128_000,
+    'llama-3.3-70b-specdec': 8_192,
+    'llama-3.1-70b-versatile': 128_000,
+    'llama-3.1-8b-instant': 128_000,
+    'llama-3.2-1b-preview': 128_000,
+    'llama-3.2-3b-preview': 128_000,
+    'llama-3.2-11b-vision-preview': 128_000,
+    'llama-3.2-90b-vision-preview': 128_000,
+    'mixtral-8x7b-32768': 32_768,
+    'gemma2-9b-it': 8_192,
+    'gemma-7b-it': 8_192,
+  };
+
+  return fetchOpenAICompatibleModels(
+    'https://api.groq.com/openai/v1',
+    apiKey,
+    GROQ_LIMITS,
+  );
+}
+
+/**
+ * Fetch models from DeepSeek API
+ */
+async function fetchDeepSeekModels(
+  apiKey?: string,
+): Promise<Record<string, ModelInfo>> {
+  const DEEPSEEK_LIMITS: Record<string, number> = {
+    'deepseek-chat': 64_000,
+    'deepseek-coder': 16_384,
+    'deepseek-reasoner': 64_000,
+  };
+
+  return fetchOpenAICompatibleModels(
+    'https://api.deepseek.com/v1',
+    apiKey,
+    DEEPSEEK_LIMITS,
+  );
+}
+
+/**
+ * Fetch models from OpenAI API
+ */
+async function fetchOpenAIModels(
+  apiKey?: string,
+): Promise<Record<string, ModelInfo>> {
+  const OPENAI_LIMITS: Record<string, number> = {
+    'gpt-4o': 128_000,
+    'gpt-4o-mini': 128_000,
+    'gpt-4-turbo': 128_000,
+    'gpt-4-turbo-preview': 128_000,
+    'gpt-4': 8_192,
+    'gpt-4-32k': 32_768,
+    'gpt-3.5-turbo': 16_385,
+    'gpt-3.5-turbo-16k': 16_385,
+    'o1-preview': 128_000,
+    'o1-mini': 128_000,
+  };
+
+  return fetchOpenAICompatibleModels(
+    'https://api.openai.com/v1',
+    apiKey,
+    OPENAI_LIMITS,
+  );
+}
+
+/**
  * Fetch models from Ollama API
  */
 async function fetchOllamaModels(
@@ -326,9 +569,100 @@ export async function fetchAndCacheModelContextLimits(
       models = await fetchOllamaModels(baseUrl || 'http://localhost:11434');
       break;
 
-    // For other providers, we don't have API access to fetch limits
-    // They will use KNOWN_CONTEXT_LIMITS fallback
+    case 'openai':
+      models = await fetchOpenAIModels(apiKey);
+      break;
+
+    case 'groq':
+      models = await fetchGroqModels(apiKey);
+      break;
+
+    case 'together':
+      models = await fetchTogetherModels(apiKey);
+      break;
+
+    case 'mistral':
+      models = await fetchMistralModels(apiKey);
+      break;
+
+    case 'deepseek':
+      models = await fetchDeepSeekModels(apiKey);
+      break;
+
+    case 'lmstudio':
+      models = await fetchOpenAICompatibleModels(
+        baseUrl || 'http://localhost:1234/v1',
+        apiKey,
+      );
+      break;
+
+    case 'zai':
+      models = await fetchOpenAICompatibleModels(
+        baseUrl || 'https://api.z.ai/api/coding/paas/v4',
+        apiKey,
+        { 'glm-4.7': 128_000, 'glm-4-flash': 128_000, 'glm-4-plus': 128_000 },
+      );
+      break;
+
+    case 'anthropic':
+      // Anthropic API doesn't expose context limits, use known values
+      models = {
+        'claude-3-5-sonnet-20241022': {
+          id: 'claude-3-5-sonnet-20241022',
+          contextLength: 200_000,
+        },
+        'claude-3-5-haiku-20241022': {
+          id: 'claude-3-5-haiku-20241022',
+          contextLength: 200_000,
+        },
+        'claude-3-opus-20240229': {
+          id: 'claude-3-opus-20240229',
+          contextLength: 200_000,
+        },
+        'claude-3-sonnet-20240229': {
+          id: 'claude-3-sonnet-20240229',
+          contextLength: 200_000,
+        },
+        'claude-3-haiku-20240307': {
+          id: 'claude-3-haiku-20240307',
+          contextLength: 200_000,
+        },
+      };
+      break;
+
+    case 'gemini':
+    case 'google':
+      // Gemini/Google API - use known Gemini limits
+      models = {
+        'gemini-2.5-pro': { id: 'gemini-2.5-pro', contextLength: 1_048_576 },
+        'gemini-2.5-flash': {
+          id: 'gemini-2.5-flash',
+          contextLength: 1_048_576,
+        },
+        'gemini-2.0-flash': {
+          id: 'gemini-2.0-flash',
+          contextLength: 1_048_576,
+        },
+        'gemini-1.5-pro': { id: 'gemini-1.5-pro', contextLength: 2_097_152 },
+        'gemini-1.5-flash': {
+          id: 'gemini-1.5-flash',
+          contextLength: 1_048_576,
+        },
+      };
+      break;
+
+    case 'custom':
+      // For custom OpenAI-compatible endpoints
+      if (baseUrl) {
+        models = await fetchOpenAICompatibleModels(baseUrl, apiKey);
+      }
+      break;
+
     default:
+      // Unknown provider - try as OpenAI-compatible if baseUrl provided
+      if (baseUrl) {
+        models = await fetchOpenAICompatibleModels(baseUrl, apiKey);
+      }
       return;
   }
 
