@@ -73,7 +73,7 @@ class ReadFileToolInvocation extends BaseToolInvocation<
     super(normalizedParams, messageBus, _toolName, _toolDisplayName);
     this.resolvedPath = path.resolve(
       this.config.getTargetDir(),
-      this.params.file_path,
+      this.params.file_path || '',
     );
   }
 

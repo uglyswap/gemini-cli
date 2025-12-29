@@ -65,7 +65,7 @@ export const Footer: React.FC = () => {
     settings.merged.ui?.footer?.hideSandboxStatus || false;
   const hideModelInfo = settings.merged.ui?.footer?.hideModelInfo || false;
   const hideContextPercentage =
-    settings.merged.ui?.footer?.hideContextPercentage ?? true;
+    settings.merged.ui?.footer?.hideContextPercentage ?? false;
 
   const pathLength = Math.max(20, Math.floor(mainAreaWidth * 0.25));
   const displayPath = shortenPath(tildeifyPath(targetDir), pathLength);
@@ -144,23 +144,23 @@ export const Footer: React.FC = () => {
         </Box>
       )}
 
-      {/* Right Section: Gemini Label and Console Summary */}
+      {/* Right Section: Context Bar + Model + Console Summary */}
       {!hideModelInfo && (
         <Box alignItems="center" justifyContent="flex-end">
-          <Box alignItems="center">
+          <Box alignItems="center" flexDirection="row">
+            {!hideContextPercentage && (
+              <>
+                <ContextUsageDisplay
+                  promptTokenCount={promptTokenCount}
+                  model={model}
+                  terminalWidth={mainAreaWidth}
+                />
+                <Text color={theme.ui.symbol}> | </Text>
+              </>
+            )}
             <Text color={theme.text.accent}>
               {getDisplayString(model, config.getPreviewFeatures())}
               <Text color={theme.text.secondary}> /model</Text>
-              {!hideContextPercentage && (
-                <>
-                  {' '}
-                  <ContextUsageDisplay
-                    promptTokenCount={promptTokenCount}
-                    model={model}
-                    terminalWidth={mainAreaWidth}
-                  />
-                </>
-              )}
             </Text>
             {showMemoryUsage && <MemoryUsageDisplay />}
           </Box>

@@ -126,7 +126,7 @@ class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
    */
   getDescription(): string {
     const relativePath = makeRelative(
-      this.params.dir_path,
+      this.params.dir_path || '.',
       this.config.getTargetDir(),
     );
     return shortenPath(relativePath);
@@ -156,7 +156,7 @@ class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
   async execute(_signal: AbortSignal): Promise<ToolResult> {
     const resolvedDirPath = path.resolve(
       this.config.getTargetDir(),
-      this.params.dir_path,
+      this.params.dir_path || '.',
     );
     try {
       const stats = await fs.stat(resolvedDirPath);
