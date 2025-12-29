@@ -220,6 +220,19 @@ export function createOpenAICompatibleContentGenerator(
           }
         }
       }
+
+      // Emit final response with usage metadata for non-tool-call responses
+      // This ensures the UI can track context usage even when the model only returns text
+      if (lastUsage) {
+        const finalResponse = new GenerateContentResponse();
+        finalResponse.candidates = [];
+        const usageMetadata = new GenerateContentResponseUsageMetadata();
+        usageMetadata.promptTokenCount = lastUsage.prompt_tokens || 0;
+        usageMetadata.candidatesTokenCount = lastUsage.completion_tokens || 0;
+        usageMetadata.totalTokenCount = lastUsage.total_tokens || 0;
+        finalResponse.usageMetadata = usageMetadata;
+        yield finalResponse;
+      }
     } catch (error) {
       throw convertError(error);
     }
