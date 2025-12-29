@@ -189,9 +189,27 @@ export {
 } from './hybrid/hybrid-mode-manager.js';
 export type { HybridModeConfig } from './hybrid/hybrid-mode-manager.js';
 export { EnhancedAgentOrchestrator } from './orchestrator/enhanced-orchestrator.js';
+export {
+  ExecutionMode,
+  getDefaultOrchestratorConfig,
+} from './orchestrator/types.js';
 export type {
   ExecutionReport,
   ExecutionPlan,
   ExecutionPhase,
   OrchestratorConfig,
+  ParallelExecutionGroup,
 } from './orchestrator/types.js';
+
+// Export validation system
+export {
+  DiffValidator,
+  createDiffValidator,
+} from './validation/diff-validator.js';
+export type {
+  DiffValidationResult,
+  FileValidationResult,
+  ValidationIssue,
+  FileMetrics,
+  DiffValidatorConfig,
+} from './validation/diff-validator.js';

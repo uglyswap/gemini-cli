@@ -12,7 +12,9 @@ import type {
   AgentExecution,
   PhaseCallback,
   ApprovalCallback,
+  ParallelExecutionGroup,
 } from './types.js';
+import { ExecutionMode } from './types.js';
 import { TrustCascadeEngine } from '../trust/trust-engine.js';
 import { TrustLevel } from '../trust/types.js';
 import { AgentSelector, getAgentById } from '../agents/specialized/index.js';
@@ -179,18 +181,56 @@ export class EnhancedAgentOrchestrator {
         snapshotId = snapshot.id;
       }
 
-      // Phase 4: EXECUTE - Run agents
+      // Phase 4: EXECUTE - Run agents based on execution mode
       await this.setPhase('EXECUTE');
-      for (const agentInfo of orderedAgents) {
-        const agent = getAgentById(agentInfo.agent.id);
-        if (!agent) continue;
+      const executionMode =
+        this.config.executionMode || ExecutionMode.CONFIDENCE;
 
-        const execution = await this.executeAgent(agent, task, plan);
-        agentExecutions.push(execution);
+      if (executionMode === ExecutionMode.SPEED) {
+        // SPEED mode: Maximum parallelization - all agents at once
+        const executions = await this.executeAgentsParallel(
+          orderedAgents.map((a) => a.agent),
+          task,
+          plan,
+          this.config.maxConcurrentAgents || 5,
+        );
+        agentExecutions.push(...executions);
+      } else if (executionMode === ExecutionMode.BALANCED) {
+        // BALANCED mode: Domain-level parallelization
+        const groups = this.createParallelGroups(orderedAgents);
+        for (const group of groups) {
+          const agents = group.agentIds
+            .map((id) => getAgentById(id))
+            .filter((a): a is SpecializedAgent => a !== undefined);
 
-        // Stop on critical failure if not in autonomous mode
-        if (!execution.success && this.shouldStopOnFailure(agent)) {
-          break;
+          const executions = await this.executeAgentsParallel(
+            agents,
+            task,
+            plan,
+            this.config.maxConcurrentAgents || 5,
+          );
+          agentExecutions.push(...executions);
+
+          // Check for critical failures before moving to next group
+          const hasCriticalFailure = executions.some(
+            (e) =>
+              !e.success && this.shouldStopOnFailure(getAgentById(e.agentId)!),
+          );
+          if (hasCriticalFailure) break;
+        }
+      } else {
+        // CONFIDENCE mode (default): Sequential execution for maximum quality
+        for (const agentInfo of orderedAgents) {
+          const agent = getAgentById(agentInfo.agent.id);
+          if (!agent) continue;
+
+          const execution = await this.executeAgent(agent, task, plan);
+          agentExecutions.push(execution);
+
+          // Stop on critical failure if not in autonomous mode
+          if (!execution.success && this.shouldStopOnFailure(agent)) {
+            break;
+          }
         }
       }
 
@@ -571,6 +611,86 @@ Begin your analysis and execution now.
       trustLevel === TrustLevel.L1_SUPERVISED ||
       trustLevel === TrustLevel.L2_GUIDED
     );
+  }
+
+  /**
+   * Domain execution order for implicit consensus
+   * Earlier domains must complete before later ones
+   */
+  private static readonly DOMAIN_ORDER: Record<string, number> = {
+    security: 1, // Security validation first
+    database: 2, // Schema before backend
+    backend: 3, // API before frontend
+    'ai-ml': 3, // AI alongside backend
+    frontend: 4, // UI after backend
+    testing: 5, // Tests after implementation
+    documentation: 6, // Docs after testing
+    devops: 7, // DevOps last
+  };
+
+  /**
+   * Create parallel execution groups based on domain dependencies
+   * Agents in the same group can run in parallel
+   */
+  private createParallelGroups(
+    agents: Array<{ agent: SpecializedAgent; score: number }>,
+  ): ParallelExecutionGroup[] {
+    // Group agents by domain order
+    const domainGroups = new Map<number, SpecializedAgent[]>();
+
+    for (const agentInfo of agents) {
+      const domain = agentInfo.agent.domain;
+      const order =
+        EnhancedAgentOrchestrator.DOMAIN_ORDER[domain] ||
+        EnhancedAgentOrchestrator.DOMAIN_ORDER['frontend']; // Default to frontend order
+
+      if (!domainGroups.has(order)) {
+        domainGroups.set(order, []);
+      }
+      domainGroups.get(order)!.push(agentInfo.agent);
+    }
+
+    // Convert to ParallelExecutionGroup array, sorted by order
+    const groups: ParallelExecutionGroup[] = [];
+    const sortedOrders = Array.from(domainGroups.keys()).sort((a, b) => a - b);
+
+    for (const order of sortedOrders) {
+      const agentsInGroup = domainGroups.get(order)!;
+      const domains = [...new Set(agentsInGroup.map((a) => a.domain))];
+
+      groups.push({
+        order,
+        domains,
+        agentIds: agentsInGroup.map((a) => a.id),
+        waitForPrevious: order > 1, // Wait for previous group except first
+      });
+    }
+
+    return groups;
+  }
+
+  /**
+   * Execute multiple agents in parallel with concurrency limit
+   */
+  private async executeAgentsParallel(
+    agents: SpecializedAgent[],
+    task: string,
+    plan: ExecutionPlan,
+    maxConcurrent: number,
+  ): Promise<AgentExecution[]> {
+    const results: AgentExecution[] = [];
+
+    // Process agents in batches to respect concurrency limit
+    for (let i = 0; i < agents.length; i += maxConcurrent) {
+      const batch = agents.slice(i, i + maxConcurrent);
+      const batchPromises = batch.map((agent) =>
+        this.executeAgent(agent, task, plan),
+      );
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+    }
+
+    return results;
   }
 
   /**

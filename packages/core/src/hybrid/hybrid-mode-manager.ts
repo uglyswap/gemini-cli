@@ -7,7 +7,10 @@
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import { EnhancedAgentOrchestrator } from '../orchestrator/enhanced-orchestrator.js';
-import { DEFAULT_ORCHESTRATOR_CONFIG } from '../orchestrator/types.js';
+import {
+  DEFAULT_ORCHESTRATOR_CONFIG,
+  ExecutionMode,
+} from '../orchestrator/types.js';
 import type {
   ExecutionReport,
   ExecutionPhase,
@@ -22,6 +25,8 @@ import type { TrustLevel } from '../trust/types.js';
 export interface HybridModeConfig {
   /** Enable agentic mode (multi-agent orchestration) */
   enabled: boolean;
+  /** Execution mode: SPEED, BALANCED, or CONFIDENCE (default: CONFIDENCE) */
+  executionMode: ExecutionMode;
   /** Enable file snapshots for safety */
   enableSnapshots?: boolean;
   /** Quality gates to run */
@@ -32,15 +37,20 @@ export interface HybridModeConfig {
   maxConcurrentSessions?: number;
   /** Session timeout in milliseconds */
   sessionTimeoutMs?: number;
+  /** Enable diff validation after agent execution */
+  enableDiffValidation?: boolean;
 }
 
 /**
  * Default configuration for hybrid mode
  * NOTE: Agentic mode is ENABLED by default for enhanced multi-agent orchestration
+ * NOTE: ExecutionMode.CONFIDENCE is default for maximum code quality
  */
 export const DEFAULT_HYBRID_CONFIG: HybridModeConfig = {
   enabled: true, // Enabled by default
+  executionMode: ExecutionMode.CONFIDENCE, // CONFIDENCE mode for perfect code
   enableSnapshots: true,
+  enableDiffValidation: true,
   qualityGates: ['typescript', 'eslint'],
   maxConcurrentSessions: 5,
   sessionTimeoutMs: 30 * 60 * 1000, // 30 minutes
@@ -108,9 +118,12 @@ export class HybridModeManager {
       ...DEFAULT_ORCHESTRATOR_CONFIG,
       projectRoot: workingDirectory,
       workingDirectory,
+      executionMode: this.config.executionMode,
       enableSnapshots: this.config.enableSnapshots ?? true,
+      enableDiffValidation: this.config.enableDiffValidation ?? true,
       qualityGates: this.config.qualityGates,
       requireApprovalAbove: this.config.requireApprovalAbove,
+      maxConcurrentAgents: this.config.maxConcurrentSessions ?? 5,
     };
 
     this.orchestrator = new EnhancedAgentOrchestrator(
@@ -120,6 +133,26 @@ export class HybridModeManager {
     );
 
     this.isInitialized = true;
+  }
+
+  /**
+   * Get current execution mode
+   */
+  getExecutionMode(): ExecutionMode {
+    return this.config.executionMode;
+  }
+
+  /**
+   * Set execution mode
+   */
+  setExecutionMode(mode: ExecutionMode): void {
+    this.config.executionMode = mode;
+    // If orchestrator is already initialized, we need to reinitialize
+    if (this.orchestrator) {
+      void this.orchestrator.cleanup();
+      this.orchestrator = null;
+      this.isInitialized = false;
+    }
   }
 
   /**
@@ -198,6 +231,19 @@ export function parseHybridConfig(
     config.enabled = false;
   }
 
+  // Check execution mode from environment
+  const envExecutionMode = env?.['DEVORA_EXECUTION_MODE'];
+  if (envExecutionMode) {
+    const mode = envExecutionMode.toLowerCase();
+    if (mode === 'speed') {
+      config.executionMode = ExecutionMode.SPEED;
+    } else if (mode === 'balanced') {
+      config.executionMode = ExecutionMode.BALANCED;
+    } else if (mode === 'confidence') {
+      config.executionMode = ExecutionMode.CONFIDENCE;
+    }
+  }
+
   // Parse DEVORA.md configuration (overrides env)
   if (geminiMdConfig) {
     if (typeof geminiMdConfig['enableAgentic'] === 'boolean') {
@@ -214,6 +260,23 @@ export function parseHybridConfig(
 
     if (typeof geminiMdConfig['agenticMaxSessions'] === 'number') {
       config.maxConcurrentSessions = geminiMdConfig['agenticMaxSessions'];
+    }
+
+    // Parse execution mode from DEVORA.md
+    if (typeof geminiMdConfig['executionMode'] === 'string') {
+      const mode = (geminiMdConfig['executionMode']).toLowerCase();
+      if (mode === 'speed') {
+        config.executionMode = ExecutionMode.SPEED;
+      } else if (mode === 'balanced') {
+        config.executionMode = ExecutionMode.BALANCED;
+      } else if (mode === 'confidence') {
+        config.executionMode = ExecutionMode.CONFIDENCE;
+      }
+    }
+
+    // Parse diff validation setting
+    if (typeof geminiMdConfig['enableDiffValidation'] === 'boolean') {
+      config.enableDiffValidation = geminiMdConfig['enableDiffValidation'];
     }
   }
 

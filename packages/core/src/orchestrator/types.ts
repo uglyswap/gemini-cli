@@ -11,6 +11,55 @@
 
 import type { TrustPrivileges } from '../trust/types.js';
 import { TrustLevel } from '../trust/types.js';
+
+/**
+ * Execution mode for the orchestrator
+ * Controls the balance between speed and quality
+ */
+export enum ExecutionMode {
+  /**
+   * SPEED mode: Maximum parallelization, minimal validation
+   * - All independent agents run in parallel
+   * - Only critical quality gates
+   * - No inter-agent consensus
+   * Best for: Quick iterations, prototyping
+   */
+  SPEED = 'speed',
+
+  /**
+   * BALANCED mode: Moderate parallelization with standard validation
+   * - Domain-level parallelization (e.g., all frontend agents together)
+   * - Standard quality gates
+   * - Domain-level validation
+   * Best for: Regular development work
+   */
+  BALANCED = 'balanced',
+
+  /**
+   * CONFIDENCE mode: Sequential with full validation (DEFAULT)
+   * - Domain-ordered execution for implicit consensus
+   * - All quality gates enabled
+   * - Full validation pipeline
+   * - DiffValidator for change verification
+   * Best for: Production code, critical features
+   */
+  CONFIDENCE = 'confidence',
+}
+
+/**
+ * Parallel execution group
+ * Agents within a group can run in parallel
+ */
+export interface ParallelExecutionGroup {
+  /** Group order (lower = earlier) */
+  order: number;
+  /** Domain(s) in this group */
+  domains: string[];
+  /** Agent IDs in this group */
+  agentIds: string[];
+  /** Whether this group requires previous group to complete */
+  waitForPrevious: boolean;
+}
 import type {
   AgentSpecialization,
   TaskComplexity,
@@ -164,6 +213,8 @@ export interface OrchestratorConfig {
   projectRoot: string;
   /** Working directory for execution */
   workingDirectory?: string;
+  /** Execution mode (default: CONFIDENCE for perfect code) */
+  executionMode: ExecutionMode;
   /** Enable trust cascade system */
   enableTrustCascade: boolean;
   /** Enable multi-agent routing */
@@ -178,6 +229,8 @@ export interface OrchestratorConfig {
   snapshotTrustThreshold: TrustLevel;
   /** Maximum agents per task */
   maxAgentsPerTask: number;
+  /** Maximum concurrent agent executions (for parallel modes) */
+  maxConcurrentAgents: number;
   /** Quality gate strictness */
   strictQualityGates: boolean;
   /** Auto-rollback on failure */
@@ -188,6 +241,8 @@ export interface OrchestratorConfig {
   requireApprovalAbove?: TrustLevel;
   /** Timeout for individual agent execution in milliseconds (default: 5 minutes) */
   agentTimeoutMs?: number;
+  /** Enable diff validation after agent execution */
+  enableDiffValidation: boolean;
   /** Model configuration */
   modelConfig: {
     fastModel: string;
@@ -315,14 +370,19 @@ export interface ExecutionReport {
 /**
  * Default orchestrator configuration values (without projectRoot)
  * Use getDefaultOrchestratorConfig() to get a complete config with projectRoot
+ *
+ * NOTE: ExecutionMode.CONFIDENCE is the default for maximum code quality
  */
 const DEFAULT_CONFIG_VALUES: Omit<OrchestratorConfig, 'projectRoot'> = {
+  executionMode: ExecutionMode.CONFIDENCE,
   enableTrustCascade: true,
   enableMultiAgent: true,
   enableSnapshots: true,
   enableQualityGates: true,
+  enableDiffValidation: true,
   snapshotTrustThreshold: TrustLevel.L2_GUIDED,
   maxAgentsPerTask: 4,
+  maxConcurrentAgents: 5,
   strictQualityGates: false,
   autoRollbackOnFailure: true,
   verbose: false,

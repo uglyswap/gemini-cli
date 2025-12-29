@@ -209,6 +209,49 @@ You: "Create a React component with authentication"
 - 🤖 **AI/ML Team** (3 agents) - LLM APIs, MLOps, Prompt Engineering
 - 📚 **Documentation Team** (3 agents) - Technical Writing, API Docs, Architecture
 
+### ⚡ Execution Modes
+
+DEVORA supports 3 execution modes to balance **speed** vs **quality**:
+
+| Mode         | Description                                                      | Use Case                           |
+| ------------ | ---------------------------------------------------------------- | ---------------------------------- |
+| `SPEED`      | Maximum parallelization, all independent agents run concurrently | Quick prototyping, iterations      |
+| `BALANCED`   | Domain-level parallelization with standard validation            | Regular development                |
+| `CONFIDENCE` | Sequential execution with full validation **(DEFAULT)**          | Production code, critical features |
+
+```bash
+# Set execution mode via environment variable
+export DEVORA_EXECUTION_MODE=confidence
+
+# Or in DEVORA.md configuration
+# executionMode: confidence
+```
+
+**CONFIDENCE mode** (default) ensures:
+
+- Implicit consensus through domain-ordered execution (security → database → backend → frontend → testing → docs)
+- Full quality gate validation
+- DiffValidator for code change verification
+- Best for **perfect code** quality
+
+### 🔄 Parallel Execution
+
+In `SPEED` and `BALANCED` modes, agents are grouped by domain dependencies:
+
+```
+Group 1 (parallel): security + database
+     ↓ (wait)
+Group 2 (parallel): backend + api-architect
+     ↓ (wait)
+Group 3 (parallel): frontend + ui-ux + accessibility
+     ↓ (wait)
+Group 4 (parallel): testing + e2e + code-review
+     ↓ (wait)
+Group 5 (parallel): documentation + devops
+```
+
+This ensures proper dependency order while maximizing parallelism.
+
 ### 🔧 Quick Commands
 
 ```bash
