@@ -344,8 +344,9 @@ describe('CompactionHooksManager', () => {
 
   describe('Auto-Compaction Check', () => {
     it('should not compact when not needed', async () => {
-      const compacted = await hooksManager.checkAndCompact();
-      expect(compacted).toBe(false);
+      const result = await hooksManager.checkAndCompact();
+      expect(result.compacted).toBe(false);
+      expect(result.success).toBe(true);
     });
 
     it('should skip compaction when disabled', async () => {
@@ -355,8 +356,9 @@ describe('CompactionHooksManager', () => {
         { ...DEFAULT_TODO_CONFIG.compaction, enabled: false },
       );
 
-      const compacted = await disabledManager.checkAndCompact();
-      expect(compacted).toBe(false);
+      const result = await disabledManager.checkAndCompact();
+      expect(result.compacted).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 });

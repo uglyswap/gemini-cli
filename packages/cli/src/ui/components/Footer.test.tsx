@@ -117,7 +117,7 @@ describe('<Footer />', () => {
     expect(lastFrame()).not.toContain(`(${defaultProps.branchName}*)`);
   });
 
-  it('displays the model name and context percentage', () => {
+  it('displays the model name and context percentage with progress bar', () => {
     const { lastFrame } = renderWithProviders(<Footer />, {
       width: 120,
       uiState: { sessionStats: mockSessionStats },
@@ -130,7 +130,9 @@ describe('<Footer />', () => {
       }),
     });
     expect(lastFrame()).toContain(defaultProps.model);
-    expect(lastFrame()).toMatch(/\(\d+% context left\)/);
+    // New format: progress bar with percentage
+    expect(lastFrame()).toMatch(/\d+%/);
+    expect(lastFrame()).toContain('[');
   });
 
   it('displays the model name and abbreviated context percentage', () => {
@@ -146,7 +148,7 @@ describe('<Footer />', () => {
       }),
     });
     expect(lastFrame()).toContain(defaultProps.model);
-    expect(lastFrame()).toMatch(/\(\d+%\)/);
+    expect(lastFrame()).toMatch(/\d+%/);
   });
 
   describe('sandbox and trust info', () => {
@@ -282,7 +284,8 @@ describe('<Footer />', () => {
         }),
       });
       expect(lastFrame()).toContain(defaultProps.model);
-      expect(lastFrame()).not.toMatch(/\(\d+% context left\)/);
+      // Progress bar should not be present
+      expect(lastFrame()).not.toContain('[█');
     });
 
     it('shows the context percentage when hideContextPercentage is false', () => {
@@ -298,7 +301,7 @@ describe('<Footer />', () => {
         }),
       });
       expect(lastFrame()).toContain(defaultProps.model);
-      expect(lastFrame()).toMatch(/\(\d+% context left\)/);
+      expect(lastFrame()).toMatch(/\d+%/);
     });
 
     it('renders complete footer in narrow terminal (baseline narrow)', () => {

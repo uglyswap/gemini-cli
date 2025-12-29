@@ -25,10 +25,11 @@ describe('WebSearchTool', () => {
     const mockConfigInstance = {
       getGeminiClient: () => mockGeminiClient,
       getProxy: () => undefined,
-      generationConfigService: {
+      getContentGeneratorConfig: vi.fn().mockReturnValue({ authType: 'api_key' }),
+      modelConfigService: {
         getResolvedConfig: vi.fn().mockImplementation(({ model }) => ({
           model,
-          sdkConfig: {},
+          generateContentConfig: {},
         })),
       },
     } as unknown as Config;

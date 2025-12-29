@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AgentSelector } from './agent-selector.js';
 
 describe('AgentSelector', () => {
@@ -14,13 +15,13 @@ describe('AgentSelector', () => {
   });
 
   describe('selectAgents', () => {
-    it('should select react-specialist for React tasks', () => {
+    it('should select frontend-developer for React tasks', () => {
       const result = selector.selectAgents(
         'Create a new React component for user profile',
       );
       const agentIds = result.agents.map((s) => s.id);
 
-      expect(agentIds).toContain('react-specialist');
+      expect(agentIds).toContain('frontend-developer');
     });
 
     it('should select security agents for auth tasks', () => {
@@ -29,7 +30,7 @@ describe('AgentSelector', () => {
       );
       const agentIds = result.agents.map((s) => s.id);
 
-      expect(agentIds).toContain('auth-security');
+      expect(agentIds).toContain('security-engineer');
     });
 
     it('should select database agents for schema tasks', () => {
@@ -47,11 +48,11 @@ describe('AgentSelector', () => {
 
     it('should select test agents when testing is mentioned', () => {
       const result = selector.selectAgents(
-        'Write unit tests for the payment service',
+        'Write comprehensive unit tests with jest and vitest for coverage',
       );
       const agentIds = result.agents.map((s) => s.id);
 
-      expect(agentIds.some((id: string) => id.includes('test'))).toBe(true);
+      expect(agentIds).toContain('test-engineer');
     });
 
     it('should limit number of selected agents', () => {

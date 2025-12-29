@@ -325,10 +325,10 @@ describe('MemoryTool', () => {
         );
         expect(result.fileName).toContain('DEVORA.md');
         expect(result.fileDiff).toContain('Index: DEVORA.md');
-        expect(result.fileDiff).toContain('+## Gemini Added Memories');
+        expect(result.fileDiff).toContain('+## Devora Added Memories');
         expect(result.fileDiff).toContain('+- Test fact');
         expect(result.originalContent).toBe('');
-        expect(result.newContent).toContain('## Gemini Added Memories');
+        expect(result.newContent).toContain('## Devora Added Memories');
         expect(result.newContent).toContain('- Test fact');
       }
     });
@@ -406,7 +406,7 @@ describe('MemoryTool', () => {
     it('should handle existing memory file with content', async () => {
       const params = { fact: 'New fact' };
       const existingContent =
-        'Some existing content.\n\n## Gemini Added Memories\n- Old fact\n';
+        'Some existing content.\n\n## Devora Added Memories\n- Old fact\n';
 
       // Mock fs.readFile to return existing content
       vi.mocked(fs.readFile).mockResolvedValue(existingContent);

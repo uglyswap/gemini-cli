@@ -42,7 +42,9 @@ describe('mcp command', () => {
       consoleLogMock.mock.calls.join('\n') +
       consoleErrorMock.mock.calls.join('\n');
     expect(helpOutput).toContain('Manage MCP servers');
-    expect(helpOutput).toContain('Commands:');
+    // "Commands:" in English, "Commandes :" in French (with optional space)
+    // French has "Commandes" (with 'e' before 's')
+    expect(helpOutput).toMatch(/Command(e?s)?\s*:/i);
     expect(helpOutput).toContain('add');
     expect(helpOutput).toContain('remove');
     expect(helpOutput).toContain('list');

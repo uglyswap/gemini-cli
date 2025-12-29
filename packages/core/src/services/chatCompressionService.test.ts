@@ -157,6 +157,7 @@ describe('ChatCompressionService', () => {
       getContentGenerator: vi.fn().mockReturnValue({
         countTokens: vi.fn().mockResolvedValue({ totalTokens: 100 }),
       }),
+      getContentGeneratorConfig: vi.fn().mockReturnValue({ authType: 'api_key' }),
       getEnableHooks: vi.fn().mockReturnValue(false),
       getMessageBus: vi.fn().mockReturnValue(undefined),
     } as unknown as Config;

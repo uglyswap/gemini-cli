@@ -133,7 +133,7 @@ describe('ContextManager', () => {
         expect.any(Set),
         false,
       );
-      expect(result).toMatch(/--- Context from: src[\\/]GEMINI\.md ---/);
+      expect(result).toMatch(/--- Context from: src[\\/]DEVORA\.md ---/);
       expect(result).toContain('Src Content');
       expect(contextManager.getLoadedPaths()).toContain('/app/src/DEVORA.md');
     });

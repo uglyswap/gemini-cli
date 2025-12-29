@@ -114,8 +114,9 @@ describe('<StatsDisplay />', () => {
 
     expect(output).toContain('gemini-2.5-pro');
     expect(output).toContain('gemini-2.5-flash');
-    expect(output).toContain('15,000');
-    expect(output).toContain('10,000');
+    // Number format varies by locale (15,000 vs 15 000 vs 15.000)
+    expect(output).toMatch(/15[,.\s]?000/);
+    expect(output).toMatch(/10[,.\s]?000/);
     expect(output).toMatchSnapshot();
   });
 

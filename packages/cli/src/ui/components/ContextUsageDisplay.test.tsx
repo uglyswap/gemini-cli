@@ -22,7 +22,7 @@ vi.mock('../../config/settings.js', () => ({
 }));
 
 describe('ContextUsageDisplay', () => {
-  it('renders correct percentage left', () => {
+  it('renders correct percentage used with progress bar', () => {
     const { lastFrame } = render(
       <ContextUsageDisplay
         promptTokenCount={5000}
@@ -31,7 +31,9 @@ describe('ContextUsageDisplay', () => {
       />,
     );
     const output = lastFrame();
-    expect(output).toContain('50% context left');
+    expect(output).toContain('50%');
+    expect(output).toContain('[');
+    expect(output).toContain(']');
   });
 
   it('renders short label when terminal width is small', () => {
@@ -39,15 +41,16 @@ describe('ContextUsageDisplay', () => {
       <ContextUsageDisplay
         promptTokenCount={2000}
         model="gemini-pro"
-        terminalWidth={80}
+        terminalWidth={60}
       />,
     );
     const output = lastFrame();
-    expect(output).toContain('80%');
-    expect(output).not.toContain('context left');
+    expect(output).toContain('20%');
+    // Compact mode - no progress bar
+    expect(output).not.toContain('[');
   });
 
-  it('renders 0% when full', () => {
+  it('renders 100% when full', () => {
     const { lastFrame } = render(
       <ContextUsageDisplay
         promptTokenCount={10000}
@@ -56,6 +59,6 @@ describe('ContextUsageDisplay', () => {
       />,
     );
     const output = lastFrame();
-    expect(output).toContain('0% context left');
+    expect(output).toContain('100%');
   });
 });

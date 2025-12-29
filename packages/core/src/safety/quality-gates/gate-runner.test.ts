@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { describe, it, expect, beforeEach } from 'vitest';
 import { GateRunner } from './gate-runner.js';
 import type { QualityGate, GateContext, GateCheckResult } from './types.js';
 

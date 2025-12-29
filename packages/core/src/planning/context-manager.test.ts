@@ -47,19 +47,23 @@ describe('ContextManager', () => {
     });
 
     it('should generate minimal reminder', () => {
-      const todo = todoManager.createTodo({ content: 'Active task' });
+      const todo = todoManager.createTodo({
+        content: 'Complete active task',
+        activeForm: 'Completing active task',
+      });
       todoManager.startTodo(todo.id);
 
       const reminder = contextManager.generateMinimalReminder();
 
       expect(reminder).toContain('<planning-context>');
-      expect(reminder).toContain('Active task');
+      expect(reminder).toContain('Completing active task');
       expect(reminder).toContain('<progress');
     });
 
     it('should generate context snapshot', () => {
       const todo = todoManager.createTodo({
-        content: 'In progress task',
+        content: 'Process the task',
+        activeForm: 'Processing the task',
         priority: 7,
       });
       todoManager.startTodo(todo.id);
@@ -69,7 +73,7 @@ describe('ContextManager', () => {
       const snapshot = contextManager.generateContextSnapshot();
 
       expect(snapshot.timestamp).toBeDefined();
-      expect(snapshot.activeTaskSummary).toContain('In progress task');
+      expect(snapshot.activeTaskSummary).toContain('Processing the task');
       expect(snapshot.criticalDecisions).toContain('Important decision');
       expect(snapshot.activeFiles).toContain('/path/to/file.ts');
     });
@@ -168,7 +172,8 @@ describe('ContextManager', () => {
   describe('Pre-Compaction Snapshot', () => {
     it('should create comprehensive pre-compaction snapshot', () => {
       const active = todoManager.createTodo({
-        content: 'Active task',
+        content: 'Complete the active work',
+        activeForm: 'Completing the active work',
         priority: 9,
       });
       todoManager.startTodo(active.id);
@@ -186,7 +191,7 @@ describe('ContextManager', () => {
 
       expect(snapshot).toContain('# Pre-Compaction Snapshot');
       expect(snapshot).toContain('Active Task');
-      expect(snapshot).toContain('Active task');
+      expect(snapshot).toContain('Completing the active work');
       expect(snapshot).toContain('Pending Tasks');
       expect(snapshot).toContain('Critical Decisions');
       expect(snapshot).toContain('Key decision');

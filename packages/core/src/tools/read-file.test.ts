@@ -109,7 +109,7 @@ describe('ReadFileTool', () => {
         file_path: '',
       };
       expect(() => tool.build(params)).toThrow(
-        /The 'file_path' parameter must be non-empty./,
+        /Either 'file_path' or 'path' parameter must be provided and non-empty/,
       );
     });
 

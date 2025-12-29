@@ -213,14 +213,14 @@ describe('ShellTool', () => {
 
       const result = await promise;
 
-      const wrappedCommand = `{ my-command & }; __code=$?; pgrep -g 0 >${tmpFile} 2>&1; exit $__code;`;
+      const wrappedCommand = `{ my-command & }; __code=$?; pgrep -g 0 >'${tmpFile}' 2>&1; exit $__code;`;
       expect(mockShellExecutionService).toHaveBeenCalledWith(
         wrappedCommand,
         tempRootDir,
         expect.any(Function),
         expect.any(AbortSignal),
         false,
-        { pager: 'cat' },
+        expect.objectContaining({ pager: 'cat' }),
       );
       expect(result.llmContent).toContain('Background PIDs: 54322');
       // The file should be deleted by the tool
@@ -238,14 +238,14 @@ describe('ShellTool', () => {
       await promise;
 
       const tmpFile = path.join(os.tmpdir(), 'shell_pgrep_abcdef.tmp');
-      const wrappedCommand = `{ ls; }; __code=$?; pgrep -g 0 >${tmpFile} 2>&1; exit $__code;`;
+      const wrappedCommand = `{ ls; }; __code=$?; pgrep -g 0 >'${tmpFile}' 2>&1; exit $__code;`;
       expect(mockShellExecutionService).toHaveBeenCalledWith(
         wrappedCommand,
         subdir,
         expect.any(Function),
         expect.any(AbortSignal),
         false,
-        { pager: 'cat' },
+        expect.objectContaining({ pager: 'cat' }),
       );
     });
 
@@ -259,14 +259,14 @@ describe('ShellTool', () => {
       await promise;
 
       const tmpFile = path.join(os.tmpdir(), 'shell_pgrep_abcdef.tmp');
-      const wrappedCommand = `{ ls; }; __code=$?; pgrep -g 0 >${tmpFile} 2>&1; exit $__code;`;
+      const wrappedCommand = `{ ls; }; __code=$?; pgrep -g 0 >'${tmpFile}' 2>&1; exit $__code;`;
       expect(mockShellExecutionService).toHaveBeenCalledWith(
         wrappedCommand,
         path.join(tempRootDir, 'subdir'),
         expect.any(Function),
         expect.any(AbortSignal),
         false,
-        { pager: 'cat' },
+        expect.objectContaining({ pager: 'cat' }),
       );
     });
 

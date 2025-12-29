@@ -4,16 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { describe, it, expect, beforeEach, vi, type MockedFunction } from 'vitest';
 import { TrustCascadeEngine } from './trust-engine.js';
 import { TrustLevel } from './types.js';
 import * as fs from 'node:fs';
 
 // Mock fs module
-jest.mock('node:fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  mkdirSync: jest.fn(),
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
 }));
 
 describe('TrustCascadeEngine', () => {
@@ -21,15 +22,24 @@ describe('TrustCascadeEngine', () => {
   const mockWorkingDir = '/test/project';
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
+    vi.clearAllMocks();
+    (fs.existsSync as MockedFunction<typeof fs.existsSync>).mockReturnValue(false);
     engine = new TrustCascadeEngine(mockWorkingDir);
   });
 
   describe('calculateTrustLevel', () => {
-    it('should return L1_SUPERVISED for unknown agents', () => {
+    it('should return domain-based initial trust level for new agents', () => {
+      // "unknown-agent" maps to "general" domain which has L2_GUIDED initial level
       const level = engine.calculateTrustLevel('unknown-agent');
-      expect(level).toBe(TrustLevel.L1_SUPERVISED);
+      expect(level).toBe(TrustLevel.L2_GUIDED);
+
+      // Security domain agents start at L1_SUPERVISED
+      const securityLevel = engine.calculateTrustLevel('security-auditor');
+      expect(securityLevel).toBe(TrustLevel.L1_SUPERVISED);
+
+      // Testing domain agents start at L3_TRUSTED
+      const testingLevel = engine.calculateTrustLevel('testing-runner');
+      expect(testingLevel).toBe(TrustLevel.L3_TRUSTED);
     });
 
     it('should increase trust level after successful executions', () => {
@@ -165,7 +175,7 @@ describe('TrustCascadeEngine', () => {
   });
 
   describe('clearQuarantine', () => {
-    it('should reset quarantined agent to supervised', () => {
+    it('should reset quarantined agent to domain-based initial level', () => {
       const agentId = 'quarantined-agent';
 
       // Quarantine the agent
@@ -179,8 +189,9 @@ describe('TrustCascadeEngine', () => {
       const cleared = engine.clearQuarantine(agentId, 'Reviewed and approved');
       expect(cleared).toBe(true);
 
+      // After clearing, agent returns to domain-based initial level (general → L2_GUIDED)
       const level = engine.calculateTrustLevel(agentId);
-      expect(level).toBe(TrustLevel.L1_SUPERVISED);
+      expect(level).toBe(TrustLevel.L2_GUIDED);
     });
 
     it('should return false for non-quarantined agent', () => {

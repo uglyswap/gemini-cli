@@ -933,10 +933,11 @@ describe('Server Config (config.ts)', () => {
       expect(registeredWrappers).toHaveLength(1);
     });
 
-    it('should not register subagents as tools when codebaseInvestigatorSettings.enabled is false', async () => {
+    it('should not register subagents as tools when codebaseInvestigatorSettings.enabled is false and enableAgents is false', async () => {
       const params: ConfigParameters = {
         ...baseParams,
         codebaseInvestigatorSettings: { enabled: false },
+        enableAgents: false,
       };
       const config = new Config(params);
 

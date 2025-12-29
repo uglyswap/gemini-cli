@@ -117,7 +117,8 @@ describe('AllowedPathChecker', () => {
     expect(result.decision).toBe(SafetyCheckDecision.ALLOW);
   });
 
-  it('should deny access if path contains a symlink pointing outside allowed directories', async () => {
+  // Symlinks require admin privileges on Windows, so skip these tests
+  it.skipIf(process.platform === 'win32')('should deny access if path contains a symlink pointing outside allowed directories', async () => {
     const symlinkPath = path.join(mockCwd, 'symlink');
     const targetPath = path.join(testRootDir, 'etc', 'passwd');
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
@@ -134,7 +135,7 @@ describe('AllowedPathChecker', () => {
     );
   });
 
-  it('should allow access if path contains a symlink pointing INSIDE allowed directories', async () => {
+  it.skipIf(process.platform === 'win32')('should allow access if path contains a symlink pointing INSIDE allowed directories', async () => {
     const symlinkPath = path.join(mockCwd, 'symlink-inside');
     const realFilePath = path.join(mockCwd, 'real-file');
     await fs.writeFile(realFilePath, 'real content');
