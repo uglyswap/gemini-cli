@@ -696,9 +696,9 @@ const SETTINGS_SCHEMA = {
         label: 'Compression Threshold',
         category: 'Model',
         requiresRestart: true,
-        default: 0.5 as number,
+        default: 0.75 as number,
         description:
-          'The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).',
+          'The fraction of context usage at which to trigger context compression (e.g. 0.5, 0.75, 0.8). Default is 0.75 (75%).',
         showInDialog: true,
       },
       skipNextSpeakerCheck: {
