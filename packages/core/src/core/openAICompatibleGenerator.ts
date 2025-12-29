@@ -568,12 +568,13 @@ function convertToOpenAIFormat(
         };
       }
 
-      // Handle function responses
+      // Handle function responses - in Gemini format, these come with role='user'
+      // but need to be converted to role='tool' for OpenAI format
       const functionResponses = parts.filter(
         (part: Part) => part && 'functionResponse' in part,
       );
 
-      if (functionResponses.length > 0 && role === 'tool') {
+      if (functionResponses.length > 0) {
         return functionResponses.map((part: Part, index: number) => {
           const funcResponse = part.functionResponse as {
             name?: string;
