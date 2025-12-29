@@ -109,20 +109,45 @@ export function createOpenAICompatibleContentGenerator(
     try {
       const messages = convertToOpenAIFormat(request);
       const systemInstruction = extractSystemInstruction(request);
+      const requestModel = request.model || modelName;
 
       // Build request options
       // Z.AI/GLM requires tool_stream=true for streaming function calls
       // This parameter is specific to z.ai and not part of OpenAI standard
       const isZAI = baseUrl.includes('z.ai');
+
+      // Detect Anthropic models (via OpenRouter or direct)
+      const isAnthropicModel =
+        requestModel.toLowerCase().includes('anthropic') ||
+        requestModel.toLowerCase().includes('claude');
+
+      // Use a safer max_tokens default that works across providers
+      const maxTokens = request.config?.maxOutputTokens || 8192;
+
+      const tools = convertTools(request.config?.tools);
+
+      if (DEBUG) {
+        console.error('[DEBUG STREAM] Starting request:', {
+          model: requestModel,
+          isZAI,
+          isAnthropicModel,
+          messageCount: messages.length,
+          hasSystemInstruction: !!systemInstruction,
+          toolCount: tools?.length || 0,
+          tools: tools?.map((t) => t.function?.name),
+          maxTokens,
+        });
+      }
+
       const stream = await client.chat.completions.create({
-        model: request.model || modelName,
+        model: requestModel,
         messages: systemInstruction
           ? [{ role: 'system', content: systemInstruction }, ...messages]
           : messages,
         temperature: request.config?.temperature,
         top_p: request.config?.topP,
-        max_tokens: request.config?.maxOutputTokens || 20000,
-        tools: convertTools(request.config?.tools),
+        max_tokens: maxTokens,
+        tools: tools?.length ? tools : undefined, // Don't send empty tools array
         stream: true,
         stream_options: { include_usage: true },
         ...(isZAI ? { tool_stream: true } : {}),
@@ -291,25 +316,50 @@ export function createOpenAICompatibleContentGenerator(
         const wantsJson =
           request.config?.responseMimeType === 'application/json';
 
+        const tools = convertTools(request.config?.tools);
+
+        // Determine if provider supports response_format (OpenAI-native feature)
+        // OpenRouter with Anthropic models doesn't support response_format
+        const isAnthropicModel =
+          requestModel.toLowerCase().includes('anthropic') ||
+          requestModel.toLowerCase().includes('claude');
+        const supportsResponseFormat =
+          !isAnthropicModel && !baseUrl.includes('openrouter');
+
+        // Use a safer max_tokens default that works across providers
+        const maxTokens = request.config?.maxOutputTokens || 8192;
+
         if (DEBUG) {
           console.error('[DEBUG NON-STREAM] Request:', {
             model: requestModel,
             wantsJson,
+            supportsResponseFormat,
+            isAnthropicModel,
             messageCount: messages.length,
             hasSystemInstruction: !!systemInstruction,
+            toolCount: tools?.length || 0,
+            tools: tools?.map((t) => t.function?.name),
+            maxTokens,
           });
         }
 
         const completion = await client.chat.completions.create({
           model: requestModel,
           messages: systemInstruction
-            ? [{ role: 'system', content: systemInstruction }, ...messages]
+            ? [
+                { role: 'system' as const, content: systemInstruction },
+                ...messages,
+              ]
             : messages,
           temperature: request.config?.temperature,
           top_p: request.config?.topP,
-          max_tokens: request.config?.maxOutputTokens || 20000,
-          tools: convertTools(request.config?.tools),
-          response_format: wantsJson ? { type: 'json_object' } : undefined,
+          max_tokens: maxTokens,
+          tools: tools?.length ? tools : undefined,
+          // Only include response_format for providers that support it
+          response_format:
+            wantsJson && supportsResponseFormat
+              ? { type: 'json_object' }
+              : undefined,
           stream: false,
         });
 
@@ -712,7 +762,35 @@ function mapFinishReason(reason: string | null | undefined): FinishReason {
 
 function convertError(error: unknown): Error {
   if (error instanceof OpenAI.APIError) {
-    const message = `OpenAI-Compatible API Error: ${error.status} - ${error.message}`;
+    // Extract detailed error information from the API response
+    let details = '';
+    if (error.error && typeof error.error === 'object') {
+      const errorObj = error.error as Record<string, unknown>;
+      if (errorObj['message']) {
+        details = ` Details: ${errorObj['message']}`;
+      }
+      if (errorObj['metadata']) {
+        details += ` Metadata: ${JSON.stringify(errorObj['metadata'])}`;
+      }
+      // OpenRouter often includes error details in nested error object
+      if (errorObj['error'] && typeof errorObj['error'] === 'object') {
+        const nestedError = errorObj['error'] as Record<string, unknown>;
+        if (nestedError['message']) {
+          details += ` Nested: ${nestedError['message']}`;
+        }
+      }
+      // Include raw error for debugging
+      if (!details) {
+        details = ` Raw: ${JSON.stringify(error.error)}`;
+      }
+    }
+    const message = `OpenAI-Compatible API Error: ${error.status} - ${error.message}${details}`;
+    console.error('[OpenAI Compat] API Error:', {
+      status: error.status,
+      message: error.message,
+      error: JSON.stringify(error.error, null, 2),
+      headers: error.headers,
+    });
     const newError = new Error(message);
     (newError as Error & { status?: number }).status = error.status;
     return newError;
