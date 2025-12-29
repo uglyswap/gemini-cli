@@ -193,6 +193,7 @@ export class AgentSession {
           role: 'user',
           parts: toolResults.map((tc) => ({
             functionResponse: {
+              id: tc.id, // Required for OpenAI-compatible providers (e.g., Anthropic via OpenRouter)
               name: tc.name,
               response: {
                 result: tc.success ? tc.result : { error: tc.error },
@@ -476,7 +477,12 @@ GUIDELINES:
         textParts.push(part.text);
       }
       if (part.functionCall) {
+        // Generate a unique ID if the model doesn't provide one (OpenAI-compatible providers require this)
+        const toolCallId =
+          part.functionCall.id ||
+          `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
         const toolCall: AgentToolCall = {
+          id: toolCallId,
           name: part.functionCall.name || 'unknown',
           args: safeArgs(part.functionCall.args),
           success: false, // Will be set to true after execution

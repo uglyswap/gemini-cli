@@ -60,6 +60,8 @@ export interface AgentTaskResult {
  * Record of a tool call made by an agent
  */
 export interface AgentToolCall {
+  /** Unique ID for the tool call (required for OpenAI-compatible providers) */
+  id?: string;
   /** Tool name */
   name: string;
   /** Tool arguments */
