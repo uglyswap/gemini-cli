@@ -13,6 +13,7 @@
 import type { TodoManager, CompactionStatus } from '../todo-manager.js';
 import type { ContextManager, ContextSnapshot } from '../context-manager.js';
 import type { CompactionConfig, CompactionInfo } from '../types.js';
+import { TodoStatus } from '../types.js';
 
 /**
  * Hook execution result
@@ -597,7 +598,7 @@ export function createMinTaskPreservationHook(
   minPendingTasks: number,
 ): PreCompactHook {
   return async (ctx) => {
-    const pending = ctx.todoManager.getTodos({ status: 'pending' });
+    const pending = ctx.todoManager.getTodos({ status: TodoStatus.PENDING });
     if (pending.length < minPendingTasks) {
       return {
         success: true,

@@ -369,8 +369,16 @@ function convertToOpenAIFormat(
 
   return contents
     .map((content: Content) => {
-      const role =
-        content.role === 'model' ? 'assistant' : (content.role as string);
+      const role: 'user' | 'assistant' | 'system' | 'tool' =
+        content.role === 'model'
+          ? 'assistant'
+          : content.role === 'user'
+            ? 'user'
+            : content.role === 'system'
+              ? 'system'
+              : content.role === 'tool'
+                ? 'tool'
+                : 'user';
       const parts = content.parts || [];
 
       // Handle single text part
@@ -415,7 +423,7 @@ function convertToOpenAIFormat(
         (part: Part) => part && 'functionResponse' in part,
       );
 
-      if (functionResponses.length > 0 && role === 'function') {
+      if (functionResponses.length > 0 && role === 'tool') {
         return functionResponses.map((part: Part, index: number) => ({
           role: 'tool' as const,
           tool_call_id: part.functionResponse?.name || `call_${index}`,
@@ -430,11 +438,11 @@ function convertToOpenAIFormat(
         .join('\n');
 
       return {
-        role: role === 'user' ? 'user' : 'assistant',
+        role: (role === 'user' ? 'user' : 'assistant'),
         content: text,
       };
     })
-    .flat();
+    .flat() as OpenAI.Chat.ChatCompletionMessageParam[];
 }
 
 function convertTools(

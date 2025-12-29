@@ -11,6 +11,7 @@
  */
 
 import type { AgenticTodo, CompactionConfig } from './types.js';
+import { TodoStatus } from './types.js';
 import type { TodoManager } from './todo-manager.js';
 import { estimateTokensForText } from './todo-manager.js';
 
@@ -190,8 +191,8 @@ export class ContextManager {
    */
   generateContextSnapshot(): ContextSnapshot {
     const active = this.todoManager.getActiveTodo();
-    const pending = this.todoManager.getTodos({ status: 'pending' });
-    const blocked = this.todoManager.getTodos({ status: 'blocked' });
+    const pending = this.todoManager.getTodos({ status: TodoStatus.PENDING });
+    const blocked = this.todoManager.getTodos({ status: TodoStatus.BLOCKED });
     const decisions = this.todoManager.getRecentDecisions(5);
 
     // Gather active files
@@ -634,7 +635,7 @@ export class ContextManager {
     }
 
     // Check for too many blocked tasks
-    const blocked = this.todoManager.getTodos({ status: 'blocked' });
+    const blocked = this.todoManager.getTodos({ status: TodoStatus.BLOCKED });
     if (blocked.length > 5) {
       issues.push(
         `${blocked.length} tasks are blocked - consider resolving some`,

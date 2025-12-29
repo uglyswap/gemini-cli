@@ -24,6 +24,8 @@ import { GateRunner } from '../safety/quality-gates/gate-runner.js';
 import { AgentSessionManager } from '../agents/session/agent-session-manager.js';
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
+import type { Tool } from '@google/genai';
 
 // New components for enhanced workflow
 import {
@@ -69,6 +71,7 @@ export class EnhancedAgentOrchestrator {
     cliConfig: Config,
     contentGenerator: ContentGenerator,
     orchestratorConfig: OrchestratorConfig,
+    toolRegistry?: ToolRegistry,
   ) {
     this.config = orchestratorConfig;
 
@@ -93,11 +96,18 @@ export class EnhancedAgentOrchestrator {
       verbose: orchestratorConfig.verbose,
     });
 
+    // Convert tool registry to Gemini Tool format
+    const defaultTools: Tool[] = toolRegistry
+      ? [{ functionDeclarations: toolRegistry.getFunctionDeclarations() }]
+      : [];
+
     // Initialize session manager for isolated agent contexts
     this.sessionManager = new AgentSessionManager(cliConfig, contentGenerator, {
       workingDirectory: workingDir,
       maxConcurrentSessions: 5,
       reuseAgentSessions: true,
+      defaultTools,
+      toolRegistry,
     });
 
     // Initialize new enhanced workflow components

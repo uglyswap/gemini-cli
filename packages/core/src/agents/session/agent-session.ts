@@ -17,6 +17,7 @@ import type {
 import type { SpecializedAgent } from '../specialized/types.js';
 import type { Config } from '../../config/config.js';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
+import type { ToolRegistry } from '../../tools/tool-registry.js';
 
 /**
  * Safely extract args from a functionCall object.
@@ -45,10 +46,16 @@ export class AgentSession {
   private readonly workingDirectory: string;
   private readonly history: Content[] = [];
   private readonly tools: Tool[];
+  private readonly toolRegistry: ToolRegistry | undefined;
   private readonly eventCallbacks: AgentSessionEventCallback[] = [];
 
   private state: AgentSessionState;
   private isActive = true;
+
+  // Track files modified during execution
+  private modifiedFiles: Set<string> = new Set();
+  private createdFiles: Set<string> = new Set();
+  private deletedFiles: Set<string> = new Set();
 
   constructor(
     private readonly config: Config,
@@ -59,6 +66,7 @@ export class AgentSession {
     this.agent = sessionConfig.agent;
     this.workingDirectory = sessionConfig.workingDirectory;
     this.tools = sessionConfig.tools || this.buildAgentTools();
+    this.toolRegistry = sessionConfig.toolRegistry;
 
     // Initialize with any provided context
     if (sessionConfig.initialContext) {
@@ -84,6 +92,7 @@ export class AgentSession {
 
   /**
    * Execute a task within this agent's isolated context
+   * Implements a full tool execution loop
    */
   async executeTask(
     task: string,
@@ -101,11 +110,20 @@ export class AgentSession {
     const startTime = Date.now();
     this.emit({ type: 'task_started', sessionId: this.sessionId, task });
 
-    try {
-      // Use the user-selected model from CLI config (best quality, no tier-based selection)
-      const selectedModel = this.config.getModel();
+    // Reset file tracking for this task
+    this.modifiedFiles.clear();
+    this.createdFiles.clear();
+    this.deletedFiles.clear();
 
-      // Build the system instruction with agent's specialized prompt
+    const allToolCalls: AgentToolCall[] = [];
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalTokens = 0;
+    let finalText = '';
+
+    try {
+      // Use the user-selected model from CLI config
+      const selectedModel = this.config.getModel();
       const systemInstruction = this.buildSystemInstruction();
 
       // Add user message to history
@@ -115,51 +133,94 @@ export class AgentSession {
       };
       this.history.push(userContent);
 
-      // Make the API call with user's selected model
-      const response = await this.contentGenerator.generateContent(
-        {
-          model: selectedModel,
-          contents: this.history,
-          config: {
-            systemInstruction,
-            tools: this.tools,
-            maxOutputTokens: 32768, // Max quality output
-            temperature: 0.7,
-            abortSignal,
+      // Maximum iterations to prevent infinite loops
+      const MAX_ITERATIONS = 10;
+      let iteration = 0;
+
+      while (iteration < MAX_ITERATIONS) {
+        iteration++;
+
+        // Check for abort signal
+        if (abortSignal?.aborted) {
+          throw new Error('Task was aborted');
+        }
+
+        // Make API call
+        const response = await this.contentGenerator.generateContent(
+          {
+            model: selectedModel,
+            contents: this.history,
+            config: {
+              systemInstruction,
+              tools: this.tools,
+              maxOutputTokens: 32768,
+              temperature: 0.7,
+              abortSignal,
+            },
           },
-        },
-        `agent-${this.agent.id}-${this.sessionId}`,
-      );
+          `agent-${this.agent.id}-${this.sessionId}`,
+        );
 
-      // Extract response content
-      const responseContent = response.candidates?.[0]?.content;
-      if (responseContent) {
-        this.history.push(responseContent);
+        // Track token usage
+        if (response.usageMetadata) {
+          totalPromptTokens += response.usageMetadata.promptTokenCount || 0;
+          totalCompletionTokens +=
+            response.usageMetadata.candidatesTokenCount || 0;
+          totalTokens += response.usageMetadata.totalTokenCount || 0;
+        }
+
+        // Extract response content
+        const responseContent = response.candidates?.[0]?.content;
+        if (responseContent) {
+          this.history.push(responseContent);
+        }
+
+        // Parse response for text and tool calls
+        const { text, toolCalls } = this.parseResponse(responseContent);
+        finalText = text;
+
+        // If no tool calls, we're done
+        if (toolCalls.length === 0) {
+          break;
+        }
+
+        // Execute tool calls
+        const toolResults = await this.executeToolCalls(toolCalls, abortSignal);
+        allToolCalls.push(...toolResults);
+
+        // Add tool results to history for the model
+        const toolResultContent: Content = {
+          role: 'user',
+          parts: toolResults.map((tc) => ({
+            functionResponse: {
+              name: tc.name,
+              response: {
+                result: tc.success ? tc.result : { error: tc.error },
+              },
+            },
+          })),
+        };
+        this.history.push(toolResultContent);
       }
-
-      // Extract text and tool calls from response
-      const { text, toolCalls } = this.parseResponse(responseContent);
 
       // Update state
       this.state.lastActiveAt = new Date();
       this.state.taskCount++;
-      if (response.usageMetadata) {
-        this.state.totalTokens += response.usageMetadata.totalTokenCount || 0;
-      }
+      this.state.totalTokens += totalTokens;
 
       const result: AgentTaskResult = {
         success: true,
-        output: text,
-        toolCalls,
+        output: finalText,
+        toolCalls: allToolCalls,
+        modifiedFiles: Array.from(this.modifiedFiles),
+        createdFiles: Array.from(this.createdFiles),
+        deletedFiles: Array.from(this.deletedFiles),
         durationMs: Date.now() - startTime,
-        tokenUsage: response.usageMetadata
-          ? {
-              promptTokens: response.usageMetadata.promptTokenCount || 0,
-              completionTokens:
-                response.usageMetadata.candidatesTokenCount || 0,
-              totalTokens: response.usageMetadata.totalTokenCount || 0,
-            }
-          : undefined,
+        tokenUsage: {
+          promptTokens: totalPromptTokens,
+          completionTokens: totalCompletionTokens,
+          totalTokens,
+        },
       };
 
       this.emit({ type: 'task_completed', sessionId: this.sessionId, result });
@@ -169,13 +230,121 @@ export class AgentSession {
         error instanceof Error ? error.message : String(error);
       const result: AgentTaskResult = {
         success: false,
-        output: '',
+        output: finalText,
         error: errorMessage,
+        toolCalls: allToolCalls,
+        modifiedFiles: Array.from(this.modifiedFiles),
+        createdFiles: Array.from(this.createdFiles),
+        deletedFiles: Array.from(this.deletedFiles),
         durationMs: Date.now() - startTime,
       };
 
       this.emit({ type: 'task_completed', sessionId: this.sessionId, result });
       return result;
+    }
+  }
+
+  /**
+   * Execute tool calls using the tool registry
+   */
+  private async executeToolCalls(
+    toolCalls: AgentToolCall[],
+    abortSignal?: AbortSignal,
+  ): Promise<AgentToolCall[]> {
+    const results: AgentToolCall[] = [];
+
+    for (const toolCall of toolCalls) {
+      this.emit({ type: 'tool_called', sessionId: this.sessionId, toolCall });
+
+      if (!this.toolRegistry) {
+        // No tool registry - can't execute tools
+        results.push({
+          ...toolCall,
+          success: false,
+          error: 'No tool registry available for execution',
+        });
+        continue;
+      }
+
+      const tool = this.toolRegistry.getTool(toolCall.name);
+      if (!tool) {
+        results.push({
+          ...toolCall,
+          success: false,
+          error: `Tool '${toolCall.name}' not found in registry`,
+        });
+        continue;
+      }
+
+      try {
+        // Create tool invocation using build() method
+        const invocation = tool.build(toolCall.args as object);
+
+        // Execute the tool
+        const signal = abortSignal || new AbortController().signal;
+        const toolResult = await invocation.execute(signal);
+
+        // Track file modifications based on tool type
+        this.trackFileModifications(toolCall.name, toolCall.args, toolResult);
+
+        results.push({
+          ...toolCall,
+          success: !toolResult.error,
+          result: toolResult.llmContent,
+          error: toolResult.error?.message,
+        });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        results.push({
+          ...toolCall,
+          success: false,
+          error: errorMessage,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Track file modifications based on tool execution
+   */
+  private trackFileModifications(
+    toolName: string,
+    args: Record<string, unknown>,
+    _result: unknown,
+  ): void {
+    const filePath = (args['path'] || args['file_path'] || args['filePath']) as
+      | string
+      | undefined;
+
+    if (!filePath) return;
+
+    // Map tool names to file operations
+    const writeTools = [
+      'WriteFile',
+      'write_file',
+      'writeFile',
+      'EditFile',
+      'edit_file',
+      'editFile',
+    ];
+    const createTools = ['CreateFile', 'create_file', 'createFile'];
+    const deleteTools = [
+      'DeleteFile',
+      'delete_file',
+      'deleteFile',
+      'RemoveFile',
+      'remove_file',
+    ];
+
+    if (writeTools.some((t) => toolName.includes(t))) {
+      this.modifiedFiles.add(filePath);
+    } else if (createTools.some((t) => toolName.includes(t))) {
+      this.createdFiles.add(filePath);
+    } else if (deleteTools.some((t) => toolName.includes(t))) {
+      this.deletedFiles.add(filePath);
     }
   }
 
@@ -308,10 +477,10 @@ IMPORTANT:
         const toolCall: AgentToolCall = {
           name: part.functionCall.name || 'unknown',
           args: safeArgs(part.functionCall.args),
-          success: true, // Will be updated when executed
+          success: false, // Will be set to true after execution
         };
         toolCalls.push(toolCall);
-        this.emit({ type: 'tool_called', sessionId: this.sessionId, toolCall });
+        // Don't emit here - we emit in executeToolCalls after execution
       }
     }
 

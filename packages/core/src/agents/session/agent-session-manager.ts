@@ -16,6 +16,7 @@ import type {
 import type { SpecializedAgent } from '../specialized/types.js';
 import type { Config } from '../../config/config.js';
 import type { ContentGenerator } from '../../core/contentGenerator.js';
+import type { ToolRegistry } from '../../tools/tool-registry.js';
 
 /**
  * Configuration for the AgentSessionManager
@@ -29,6 +30,8 @@ export interface AgentSessionManagerConfig {
   reuseAgentSessions?: boolean;
   /** Default tools available to all agents */
   defaultTools?: Tool[];
+  /** Tool registry for executing tool calls */
+  toolRegistry?: ToolRegistry;
   /** Working directory */
   workingDirectory: string;
 }
@@ -45,6 +48,7 @@ export class AgentSessionManager {
   private readonly sessionTimeoutMs: number;
   private readonly reuseAgentSessions: boolean;
   private readonly defaultTools: Tool[];
+  private readonly toolRegistry: ToolRegistry | undefined;
   private readonly workingDirectory: string;
   // Locking mechanism to prevent race conditions
   private readonly sessionCreationLocks: Map<string, Promise<AgentSession>> =
@@ -59,6 +63,7 @@ export class AgentSessionManager {
     this.sessionTimeoutMs = managerConfig.sessionTimeoutMs || 30 * 60 * 1000; // 30 minutes
     this.reuseAgentSessions = managerConfig.reuseAgentSessions ?? true;
     this.defaultTools = managerConfig.defaultTools || [];
+    this.toolRegistry = managerConfig.toolRegistry;
     this.workingDirectory = managerConfig.workingDirectory;
   }
 
@@ -120,6 +125,7 @@ export class AgentSessionManager {
       agent,
       workingDirectory: this.workingDirectory,
       tools: this.defaultTools,
+      toolRegistry: this.toolRegistry,
     };
 
     const session = new AgentSession(

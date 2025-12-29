@@ -5,7 +5,6 @@
  */
 
 import { AGENT_REGISTRY } from '@google/gemini-cli-core';
-import type { HistoryItemWithoutId } from '../types.js';
 import { CommandKind, type SlashCommand } from './types.js';
 
 /**
@@ -64,7 +63,11 @@ export const agenticCommand: SlashCommand = {
   ],
 };
 
-function listAgents(): { type: 'messages'; messages: HistoryItemWithoutId[] } {
+function listAgents(): {
+  type: 'message';
+  messageType: 'info';
+  content: string;
+} {
   // Group agents by domain
   const byDomain: Record<string, typeof AGENT_REGISTRY> = {};
   for (const agent of AGENT_REGISTRY) {
@@ -91,14 +94,17 @@ function listAgents(): { type: 'messages'; messages: HistoryItemWithoutId[] } {
   content += `**Example:** "Create a React component with TypeScript" will engage the Frontend Developer agent.\n`;
 
   return {
-    type: 'messages',
-    messages: [{ role: 'system', content }],
+    type: 'message',
+    messageType: 'info',
+    content,
   };
 }
 
-function showStatus(
-  context: import('./types.js').CommandContext,
-): { type: 'messages'; messages: HistoryItemWithoutId[] } {
+function showStatus(context: import('./types.js').CommandContext): {
+  type: 'message';
+  messageType: 'info';
+  content: string;
+} {
   const config = context.services.config;
   const isEnabled = config?.isAgentsEnabled() ?? false;
 
@@ -112,12 +118,13 @@ function showStatus(
   }
 
   return {
-    type: 'messages',
-    messages: [{ role: 'system', content }],
+    type: 'message',
+    messageType: 'info',
+    content,
   };
 }
 
-function showHelp(): { type: 'messages'; messages: HistoryItemWithoutId[] } {
+function showHelp(): { type: 'message'; messageType: 'info'; content: string } {
   const content = `## Agentic System Help
 
 The **Multi-Agent Orchestration System** provides 28 specialized agents across 8 domains:
@@ -147,7 +154,8 @@ Simply describe your task and the system will:
 `;
 
   return {
-    type: 'messages',
-    messages: [{ role: 'system', content }],
+    type: 'message',
+    messageType: 'info',
+    content,
   };
 }

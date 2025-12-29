@@ -281,6 +281,7 @@ ${textContent}
 `;
       const result = await contentGenerator.generateContent(
         {
+          model: this.config.getModel(),
           contents: [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
           config: {
             temperature: 0,

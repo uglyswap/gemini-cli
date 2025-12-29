@@ -6,6 +6,7 @@
 
 import type { Content, Tool } from '@google/genai';
 import type { SpecializedAgent, ModelTier } from '../specialized/types.js';
+import type { ToolRegistry } from '../../tools/tool-registry.js';
 
 /**
  * Configuration for creating an agent session
@@ -19,6 +20,8 @@ export interface AgentSessionConfig {
   initialContext?: Content[];
   /** Optional tools override (defaults to agent's tools) */
   tools?: Tool[];
+  /** Tool registry for executing tool calls */
+  toolRegistry?: ToolRegistry;
   /** Maximum tokens for this session */
   maxTokens?: number;
   /** Temperature for generation */

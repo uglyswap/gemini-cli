@@ -222,7 +222,23 @@ This would activate: auth-security, api-designer, database-architect, unit-test-
 
       const report = await this.manager.executeTask(task, workingDirectory, {
         onPhaseChange: callbacks?.onPhaseChange,
-        onApprovalRequired: callbacks?.onApprovalRequired,
+        onApprovalRequired: callbacks?.onApprovalRequired
+          ? async (planOrTask) => {
+              // Extract ExecutionPlan if it has the 'task' property, otherwise treat as ExecutionPlan
+              if ('task' in planOrTask) {
+                return callbacks.onApprovalRequired!(
+                  planOrTask,
+                );
+              }
+              // For OrchestratorTask, create a minimal ExecutionPlan
+              return callbacks.onApprovalRequired!({
+                task: planOrTask.description,
+                agents: [],
+                qualityGates: [],
+                estimatedDurationMs: 0,
+              } as ExecutionPlan);
+            }
+          : undefined,
       });
 
       const message = this.formatReport(report);

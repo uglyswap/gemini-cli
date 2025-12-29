@@ -341,6 +341,7 @@ Provide a well-structured answer based on these search results.`;
 
       const synthesisResponse = await contentGenerator.generateContent(
         {
+          model: this.config.getModel(),
           contents: [{ role: 'user', parts: [{ text: synthesisPrompt }] }],
           config: {
             temperature: 0,
@@ -410,6 +411,7 @@ Provide a well-structured answer based on these search results.`;
 
       const response = await contentGenerator.generateContent(
         {
+          model: this.config.getModel(),
           contents: [
             {
               role: 'user',

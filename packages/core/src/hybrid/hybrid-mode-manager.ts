@@ -7,6 +7,7 @@
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 import { EnhancedAgentOrchestrator } from '../orchestrator/enhanced-orchestrator.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 import {
   DEFAULT_ORCHESTRATOR_CONFIG,
   ExecutionMode,
@@ -14,8 +15,9 @@ import {
 import type {
   ExecutionReport,
   ExecutionPhase,
-  ExecutionPlan,
   OrchestratorConfig,
+  PhaseCallback,
+  ApprovalCallback,
 } from '../orchestrator/types.js';
 import type { TrustLevel } from '../trust/types.js';
 
@@ -72,6 +74,7 @@ export class HybridModeManager {
   private orchestrator: EnhancedAgentOrchestrator | null = null;
   private readonly config: HybridModeConfig;
   private isInitialized = false;
+  private toolRegistry: ToolRegistry | null = null;
 
   constructor(
     private readonly cliConfig: Config,
@@ -79,6 +82,19 @@ export class HybridModeManager {
     hybridConfig?: Partial<HybridModeConfig>,
   ) {
     this.config = { ...DEFAULT_HYBRID_CONFIG, ...hybridConfig };
+  }
+
+  /**
+   * Set the tool registry for agent tool execution
+   */
+  setToolRegistry(toolRegistry: ToolRegistry): void {
+    this.toolRegistry = toolRegistry;
+    // If orchestrator already exists, reinitialize with new tools
+    if (this.orchestrator) {
+      void this.orchestrator.cleanup();
+      this.orchestrator = null;
+      this.isInitialized = false;
+    }
   }
 
   /**
@@ -130,6 +146,7 @@ export class HybridModeManager {
       this.cliConfig,
       this.contentGenerator,
       orchestratorConfig,
+      this.toolRegistry || undefined,
     );
 
     this.isInitialized = true;
@@ -162,8 +179,8 @@ export class HybridModeManager {
     task: string,
     workingDirectory: string,
     options?: {
-      onPhaseChange?: (phase: ExecutionPhase) => void | Promise<void>;
-      onApprovalRequired?: (plan: ExecutionPlan) => Promise<boolean>;
+      onPhaseChange?: PhaseCallback;
+      onApprovalRequired?: ApprovalCallback;
     },
   ): Promise<ExecutionReport> {
     if (!this.config.enabled) {
@@ -264,7 +281,7 @@ export function parseHybridConfig(
 
     // Parse execution mode from DEVORA.md
     if (typeof geminiMdConfig['executionMode'] === 'string') {
-      const mode = (geminiMdConfig['executionMode']).toLowerCase();
+      const mode = geminiMdConfig['executionMode'].toLowerCase();
       if (mode === 'speed') {
         config.executionMode = ExecutionMode.SPEED;
       } else if (mode === 'balanced') {

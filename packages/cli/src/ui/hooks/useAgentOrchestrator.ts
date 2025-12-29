@@ -130,6 +130,11 @@ export const useAgentOrchestrator = (
       managerRef.current = new HybridModeManager(config, contentGenerator, {
         enabled: isEnabled,
       });
+      // Inject the tool registry for agent tool execution
+      const toolRegistry = config.getToolRegistry();
+      if (toolRegistry) {
+        managerRef.current.setToolRegistry(toolRegistry);
+      }
     }
     return managerRef.current;
   }, [config, isEnabled]);
@@ -195,7 +200,23 @@ export const useAgentOrchestrator = (
               await options.onPhaseChange(phase);
             }
           },
-          onApprovalRequired: options?.onApprovalRequired,
+          onApprovalRequired: options?.onApprovalRequired
+            ? async (planOrTask) => {
+                // Extract ExecutionPlan if it has the 'task' property
+                if ('task' in planOrTask) {
+                  return options.onApprovalRequired!(
+                    planOrTask,
+                  );
+                }
+                // For OrchestratorTask, create a minimal ExecutionPlan
+                return options.onApprovalRequired!({
+                  task: planOrTask.description,
+                  agents: [],
+                  qualityGates: [],
+                  estimatedDurationMs: 0,
+                } as ExecutionPlan);
+              }
+            : undefined,
         });
 
         setLastReport(report);

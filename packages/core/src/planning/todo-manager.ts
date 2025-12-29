@@ -11,9 +11,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { TodoStatus } from './types.js';
 import type {
   AgenticTodo,
-  TodoStatus,
   TodoSession,
   TodoMetrics,
   SessionDecision,
@@ -267,7 +267,7 @@ export class TodoManager {
       id,
       content: options.content,
       activeForm,
-      status: 'pending',
+      status: TodoStatus.PENDING,
       priority: options.priority || 5,
       assignedAgentId: options.assignedAgentId,
       trustLevelRequired: options.trustLevelRequired,
@@ -436,7 +436,7 @@ export class TodoManager {
    * Start working on a todo (convenience method)
    */
   startTodo(id: string, agentId?: string): AgenticTodo | null {
-    const updates: UpdateTodoOptions = { status: 'in_progress' };
+    const updates: UpdateTodoOptions = { status: TodoStatus.IN_PROGRESS };
     if (agentId) {
       updates.assignedAgentId = agentId;
     }
@@ -447,14 +447,14 @@ export class TodoManager {
    * Complete a todo (convenience method)
    */
   completeTodo(id: string, result?: TodoResult): AgenticTodo | null {
-    return this.updateTodo(id, { status: 'completed', result });
+    return this.updateTodo(id, { status: TodoStatus.COMPLETED, result });
   }
 
   /**
    * Block a todo (convenience method)
    */
   blockTodo(id: string, blockers: string[]): AgenticTodo | null {
-    return this.updateTodo(id, { status: 'blocked', blockers });
+    return this.updateTodo(id, { status: TodoStatus.BLOCKED, blockers });
   }
 
   /**
@@ -672,7 +672,7 @@ export class TodoManager {
    */
   getNextTodo(): AgenticTodo | undefined {
     const pending = this.getTodos(
-      { status: 'pending' },
+      { status: TodoStatus.PENDING },
       { field: 'priority', direction: 'desc' },
     );
 
@@ -917,7 +917,7 @@ export class TodoManager {
           (todo.content.length > TOKEN_ESTIMATION.CONTENT_PREVIEW_LENGTH
             ? '...'
             : ''),
-        finalStatus: 'completed',
+        finalStatus: TodoStatus.COMPLETED,
         archivedAt: now,
       });
     }

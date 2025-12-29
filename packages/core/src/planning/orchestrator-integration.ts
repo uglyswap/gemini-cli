@@ -103,7 +103,8 @@ export class OrchestratorPlanningBridge {
 
     // Auto-compact if needed
     if (this.options.autoCompactBeforeExecution) {
-      compactionPerformed = await this.hooksManager.checkAndCompact();
+      const result = await this.hooksManager.checkAndCompact();
+      compactionPerformed = result.compacted;
     }
 
     // Generate planning context

@@ -251,6 +251,11 @@ export const useGeminiStream = (
           enabled: config.isAgentsEnabled?.() ?? true,
         },
       );
+      // Inject the tool registry for agent tool execution
+      const toolRegistry = config.getToolRegistry();
+      if (toolRegistry) {
+        orchestratorRef.current.setToolRegistry(toolRegistry);
+      }
     }
     return orchestratorRef.current;
   }, [config]);
