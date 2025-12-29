@@ -49,8 +49,24 @@ export function convertToFunctionResponse(
   llmContent: PartListUnion,
   model: string,
 ): Part[] {
+  const DEBUG = process.env['DEBUG_OPENAI_COMPAT'] === 'true';
+  if (DEBUG) {
+    console.error('[convertToFunctionResponse] Creating response:', {
+      toolName,
+      callId,
+      llmContentType: typeof llmContent,
+    });
+  }
+
   if (typeof llmContent === 'string') {
-    return [createFunctionResponsePart(callId, toolName, llmContent)];
+    const part = createFunctionResponsePart(callId, toolName, llmContent);
+    if (DEBUG) {
+      console.error('[convertToFunctionResponse] Created string part:', {
+        functionResponseId: part.functionResponse?.id,
+        functionResponseName: part.functionResponse?.name,
+      });
+    }
+    return [part];
   }
 
   const parts = toParts(llmContent);
@@ -122,9 +138,26 @@ export function convertToFunctionResponse(
   }
 
   if (siblingParts.length > 0) {
-    return [part, ...siblingParts];
+    const result = [part, ...siblingParts];
+    if (DEBUG) {
+      console.error(
+        '[convertToFunctionResponse] Final result (with siblings):',
+        {
+          partsCount: result.length,
+          firstPartId: result[0]?.functionResponse?.id,
+          firstPartName: result[0]?.functionResponse?.name,
+        },
+      );
+    }
+    return result;
   }
 
+  if (DEBUG) {
+    console.error('[convertToFunctionResponse] Final result:', {
+      functionResponseId: part.functionResponse?.id,
+      functionResponseName: part.functionResponse?.name,
+    });
+  }
   return [part];
 }
 

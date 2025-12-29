@@ -287,7 +287,44 @@ export class GeminiChat {
 
     // Add user content to history ONCE before any attempts.
     this.history.push(userContent);
+
+    // Debug logging for OpenAI-compatible mode
+    const DEBUG = process.env['DEBUG_OPENAI_COMPAT'] === 'true';
+    if (DEBUG) {
+      console.error('[GeminiChat] Added userContent to history:', {
+        role: userContent.role,
+        partsCount: userContent.parts?.length,
+        partsTypes: userContent.parts?.map((p) => {
+          if ('text' in p) return 'text';
+          if ('functionCall' in p)
+            return `functionCall(id=${(p.functionCall as { id?: string })?.id})`;
+          if ('functionResponse' in p)
+            return `functionResponse(id=${(p.functionResponse as { id?: string })?.id}, name=${(p.functionResponse as { name?: string })?.name})`;
+          return 'unknown';
+        }),
+      });
+    }
+
     const requestContents = this.getHistory(true);
+
+    if (DEBUG) {
+      console.error('[GeminiChat] History contents for request:', {
+        contentsCount: requestContents.length,
+        contents: requestContents.map((c, i) => ({
+          index: i,
+          role: c.role,
+          partsCount: c.parts?.length,
+          partsTypes: c.parts?.map((p) => {
+            if ('text' in p) return 'text';
+            if ('functionCall' in p)
+              return `functionCall(id=${(p.functionCall as { id?: string })?.id})`;
+            if ('functionResponse' in p)
+              return `functionResponse(id=${(p.functionResponse as { id?: string })?.id}, name=${(p.functionResponse as { name?: string })?.name})`;
+            return 'unknown';
+          }),
+        })),
+      });
+    }
 
     const streamWithRetries = async function* (
       this: GeminiChat,

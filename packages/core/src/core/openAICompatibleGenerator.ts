@@ -185,14 +185,6 @@ export function createOpenAICompatibleContentGenerator(
               arguments: '',
             };
 
-            console.error('[OpenAI Compat STREAM] Tool call delta:', {
-              index,
-              deltaId: toolCall.id,
-              deltaName: toolCall.function?.name,
-              existingId: existing.id,
-              existingName: existing.name,
-            });
-
             // Capture the tool call ID (comes in the first chunk for each tool)
             if (toolCall.id) {
               existing.id = toolCall.id;
@@ -236,15 +228,6 @@ export function createOpenAICompatibleContentGenerator(
         }
 
         if (isToolCallFinish && accumulatedToolCalls.size > 0) {
-          console.error(
-            '[OpenAI Compat STREAM] Emitting accumulated tool calls:',
-          );
-          for (const [idx, tc] of accumulatedToolCalls) {
-            console.error(
-              `  [${idx}]: id=${tc.id}, name=${tc.name}, argsLen=${tc.arguments.length}`,
-            );
-          }
-
           const parts: Part[] = [];
 
           for (const [, toolCall] of accumulatedToolCalls) {
@@ -268,19 +251,19 @@ export function createOpenAICompatibleContentGenerator(
                 continue;
               }
 
-              const fnCallPart = {
+              // Generate a unique ID if the model didn't provide one
+              // OpenRouter/Anthropic models may not include IDs in streaming responses
+              const toolCallId =
+                toolCall.id ||
+                `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+              parts.push({
                 functionCall: {
                   name: toolCall.name,
                   args: parsedArgs,
                   // Pass the tool call ID so it can be matched with the tool result
-                  id: toolCall.id,
+                  id: toolCallId,
                 },
-              };
-              console.error(
-                '[OpenAI Compat STREAM] Created functionCall part:',
-                JSON.stringify(fnCallPart),
-              );
-              parts.push(fnCallPart);
+              });
             } catch (e) {
               // Log parsing error for debugging
               console.error(
@@ -538,24 +521,8 @@ function convertToOpenAIFormat(
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const contents = normalizeContents(request.contents);
 
-  console.error('[OpenAI Compat] === CONVERTING TO OPENAI FORMAT ===');
-  console.error('[OpenAI Compat] Input contents count:', contents.length);
-
   const result = contents
-    .map((content: Content, contentIndex: number) => {
-      console.error(`[OpenAI Compat] Content[${contentIndex}]:`, {
-        role: content.role,
-        partsCount: content.parts?.length || 0,
-        partsTypes: content.parts?.map((p) => {
-          if ('text' in p) return 'text';
-          if ('functionCall' in p)
-            return `functionCall(id=${(p.functionCall as { id?: string })?.id}, name=${(p.functionCall as { name?: string })?.name})`;
-          if ('functionResponse' in p)
-            return `functionResponse(id=${(p.functionResponse as { id?: string })?.id}, name=${(p.functionResponse as { name?: string })?.name})`;
-          return 'unknown';
-        }),
-      });
-
+    .map((content: Content) => {
       const role: 'user' | 'assistant' | 'system' | 'tool' =
         content.role === 'model'
           ? 'assistant'
@@ -570,15 +537,10 @@ function convertToOpenAIFormat(
 
       // Handle single text part
       if (parts.length === 1 && parts[0] && 'text' in parts[0]) {
-        const msg = {
+        return {
           role: role as 'user' | 'assistant',
           content: parts[0].text || '',
         };
-        console.error(`[OpenAI Compat] -> Text message:`, {
-          role: msg.role,
-          contentLength: msg.content.length,
-        });
-        return msg;
       }
 
       // Handle function calls
@@ -600,10 +562,6 @@ function convertToOpenAIFormat(
             // This ID must match the tool_call_id in the corresponding tool response
             const callId = functionCall.id || `call_${index}`;
 
-            console.error(
-              `[OpenAI Compat] -> FunctionCall[${index}]: id=${callId}, name=${functionCall.name}, originalId=${functionCall.id}`,
-            );
-
             return {
               id: callId,
               type: 'function' as const,
@@ -615,16 +573,11 @@ function convertToOpenAIFormat(
           })
           .filter(Boolean);
 
-        const msg = {
+        return {
           role: 'assistant' as const,
           content: null,
           tool_calls: toolCalls as OpenAI.Chat.ChatCompletionMessageToolCall[],
         };
-        console.error(
-          `[OpenAI Compat] -> Assistant with tool_calls:`,
-          toolCalls.map((tc) => ({ id: tc?.id, name: tc?.function?.name })),
-        );
-        return msg;
       }
 
       // Handle function responses - in Gemini format, these come with role='user'
@@ -646,10 +599,6 @@ function convertToOpenAIFormat(
             const toolCallId =
               funcResponse?.id || funcResponse?.name || `call_${index}`;
 
-            console.error(
-              `[OpenAI Compat] -> FunctionResponse[${index}]: tool_call_id=${toolCallId}, originalId=${funcResponse?.id}, name=${funcResponse?.name}`,
-            );
-
             return {
               role: 'tool' as const,
               tool_call_id: toolCallId,
@@ -666,35 +615,12 @@ function convertToOpenAIFormat(
         .map((part: Part) => ('text' in part ? part.text || '' : ''))
         .join('\n');
 
-      const msg = {
+      return {
         role: role === 'user' ? 'user' : 'assistant',
         content: text,
       };
-      console.error(`[OpenAI Compat] -> Generic message:`, {
-        role: msg.role,
-        contentLength: text.length,
-      });
-      return msg;
     })
     .flat() as OpenAI.Chat.ChatCompletionMessageParam[];
-
-  console.error('[OpenAI Compat] === FINAL MESSAGES TO SEND ===');
-  result.forEach((msg, i) => {
-    if ('tool_calls' in msg && msg.tool_calls) {
-      console.error(
-        `[OpenAI Compat] Message[${i}]: role=${msg.role}, tool_calls=`,
-        msg.tool_calls.map((tc) => ({ id: tc.id, name: tc.function?.name })),
-      );
-    } else if (msg.role === 'tool') {
-      console.error(
-        `[OpenAI Compat] Message[${i}]: role=${msg.role}, tool_call_id=${(msg as { tool_call_id?: string }).tool_call_id}`,
-      );
-    } else {
-      console.error(
-        `[OpenAI Compat] Message[${i}]: role=${msg.role}, content_length=${typeof msg.content === 'string' ? msg.content.length : 0}`,
-      );
-    }
-  });
 
   return result;
 }
@@ -748,20 +674,7 @@ function convertToGeminiResponse(
   }
 
   if (message?.tool_calls) {
-    console.error('[OpenAI Compat] === TOOL CALLS FROM API ===');
-    console.error(
-      '[OpenAI Compat] tool_calls count:',
-      message.tool_calls.length,
-    );
-
     for (const toolCall of message.tool_calls) {
-      console.error('[OpenAI Compat] Tool call:', {
-        id: toolCall.id,
-        type: toolCall.type,
-        functionName: toolCall.function?.name,
-        argumentsLength: toolCall.function?.arguments?.length,
-      });
-
       if (toolCall.function) {
         // Safely parse tool call arguments - handle undefined, empty, or invalid JSON
         let args: Record<string, unknown> = {};
@@ -778,19 +691,19 @@ function convertToGeminiResponse(
           }
         }
 
-        const functionCallPart = {
+        // Generate a unique ID if the model didn't provide one
+        // OpenRouter/Anthropic models may not include IDs in non-streaming responses
+        const functionCallId =
+          toolCall.id ||
+          `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        parts.push({
           functionCall: {
             name: toolCall.function.name,
             args,
             // Pass the tool call ID so it can be matched with the tool result
-            id: toolCall.id,
+            id: functionCallId,
           },
-        };
-        console.error(
-          '[OpenAI Compat] Created functionCall part:',
-          JSON.stringify(functionCallPart, null, 2),
-        );
-        parts.push(functionCallPart);
+        });
       }
     }
   }
