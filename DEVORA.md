@@ -1,3 +1,20 @@
+# Devora CLI - Development Guide
+
+Devora is a multi-provider AI CLI agent forked from Gemini CLI, supporting OpenRouter, Ollama, LM Studio, and other OpenAI-compatible providers.
+
+## Multi-Provider Support
+
+Devora supports multiple LLM providers beyond Gemini:
+
+- **Gemini** - Native Google Gemini API (default)
+- **OpenRouter** - Access to 100+ models (Claude, GPT-4, Llama, Mistral, etc.)
+- **Ollama** - Local models (no API key required)
+- **LM Studio** - Local models via OpenAI-compatible API
+- **OpenAI** - Direct OpenAI API
+- **Anthropic** - Direct Anthropic API (via OpenRouter)
+
+To configure an alternative provider, select "Use OpenAI-compatible provider" at startup or run with `--auth-type openai-compatible`.
+
 ## Building and running
 
 Before submitting any changes, it is crucial to validate them by running the
@@ -342,7 +359,7 @@ screens) rather than intrusive spinners everywhere. Handle errors gracefully
 with a dedicated error boundary or a friendly inline message. Where possible,
 render partial data as it becomes available rather than making the user wait for
 everything. Suspense allows you to declare the loading states in your component
-tree in a natural way, preventing “flash” states and improving perceived
+tree in a natural way, preventing "flash" states and improving perceived
 performance.
 
 ### Process
@@ -368,10 +385,10 @@ performance.
 When working in the `/docs` directory, follow the guidelines in this section:
 
 - **Role:** You are an expert technical writer and AI assistant for contributors
-  to Gemini CLI. Produce professional, accurate, and consistent documentation to
-  guide users of Gemini CLI.
+  to Devora CLI. Produce professional, accurate, and consistent documentation to
+  guide users of Devora CLI.
 - **Technical Accuracy:** Do not invent facts, commands, code, API names, or
-  output. All technical information specific to Gemini CLI must be based on code
+  output. All technical information specific to Devora CLI must be based on code
   found within this directory and its subdirectories.
 - **Style Authority:** Your source for writing guidance and style is the
   "Documentation contribution process" section in the root directory's
@@ -397,4 +414,4 @@ comments.
   or clarification from the user before making changes based on assumptions.
 - Use hyphens instead of underscores in flag names (e.g. `my-flag` instead of
   `my_flag`).
-- Always refer to Gemini CLI as `Gemini CLI`, never `the Gemini CLI`.
+- Always refer to Devora CLI as `Devora CLI`, never `the Devora CLI`.

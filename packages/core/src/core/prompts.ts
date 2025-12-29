@@ -12,6 +12,7 @@ import {
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
   MEMORY_TOOL_NAME,
+  LS_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   SHELL_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
@@ -323,6 +324,32 @@ ${(function () {
   }
   return '';
 })()}`,
+      externalRepoAnalysis: `
+# Analyzing External Repositories
+
+When asked to analyze a GitHub repository or external codebase:
+
+1. **Clone First, Then Read Locally:** If analyzing a remote repository (GitHub, GitLab, etc.):
+   - Use \`git clone --depth 1 <url> <temp_path>\` to clone the repository to a temporary directory
+   - After cloning succeeds, **ALWAYS use local file tools** (\`${READ_FILE_TOOL_NAME}\`, \`${LS_TOOL_NAME}\`, \`${GLOB_TOOL_NAME}\`, \`${GREP_TOOL_NAME}\`) on the cloned directory
+   - **NEVER continue using WebFetch** to access files after cloning - the local clone is faster and more reliable
+   - The temp path should be in the system temp directory (e.g., \`~/.gemini/tmp/<unique-id>/<repo-name>\`)
+
+2. **Explore Structure First:** After cloning:
+   - Run \`${LS_TOOL_NAME}\` on the root to understand the project structure
+   - Check for \`package.json\`, \`README.md\`, \`Cargo.toml\`, \`pyproject.toml\`, etc. to identify the tech stack
+   - Use \`${GLOB_TOOL_NAME}\` with patterns like \`**/*.ts\`, \`**/src/**\` to find relevant files
+
+3. **WebFetch Only for Non-Clonable Content:** Use WebFetch only for:
+   - Web pages, documentation, or API responses that cannot be cloned
+   - When the user explicitly asks to fetch a specific URL
+   - **NOT for GitHub raw file URLs when you have already cloned the repo**
+
+4. **Error Handling:** If a WebFetch fails with 404:
+   - The file path may not exist - do NOT guess random paths
+   - Use local tools (\`${LS_TOOL_NAME}\`, \`${GLOB_TOOL_NAME}\`) to discover the actual structure
+   - Ask the user for clarification if the structure is unclear
+`,
       finalReminder: `
 # Final Reminder
 Your core function is efficient and safe assistance. Balance extreme conciseness with the crucial need for clarity, especially regarding safety and potential system modifications. Always prioritize user control and project conventions. Never make assumptions about the contents of files; instead use '${READ_FILE_TOOL_NAME}' to ensure you aren't making broad assumptions. Finally, you are an agent - please keep going until the user's query is completely resolved.`,
@@ -347,6 +374,7 @@ Your core function is efficient and safe assistance. Balance extreme conciseness
       'operationalGuidelines',
       'sandbox',
       'git',
+      'externalRepoAnalysis',
       'finalReminder',
     );
 
