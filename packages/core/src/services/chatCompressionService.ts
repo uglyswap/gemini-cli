@@ -24,6 +24,7 @@ import {
 } from '../config/models.js';
 import { firePreCompressHook } from '../core/sessionHookTriggers.js';
 import { PreCompressTrigger } from '../hooks/types.js';
+import { AuthType } from '../core/contentGenerator.js';
 
 /**
  * Default threshold for compression token count as a fraction of the model's
@@ -177,8 +178,16 @@ export class ChatCompressionService {
       };
     }
 
+    // For OpenAI-compatible providers, use the active model directly
+    // since internal Gemini model configs are not valid for these providers
+    const authType = config.getContentGeneratorConfig()?.authType;
+    const isOpenAICompatible = authType === AuthType.USE_OPENAI_COMPATIBLE;
+    const compressionModel = isOpenAICompatible
+      ? model // Use the current active model
+      : modelStringToModelConfigAlias(model); // Use the aliased Gemini model
+
     const summaryResponse = await config.getBaseLlmClient().generateContent({
-      modelConfigKey: { model: modelStringToModelConfigAlias(model) },
+      modelConfigKey: { model: compressionModel },
       contents: [
         ...historyToCompress,
         {
