@@ -252,6 +252,39 @@ Group 5 (parallel): documentation + devops
 
 This ensures proper dependency order while maximizing parallelism.
 
+### 🧠 Enhanced Workflow Components
+
+DEVORA includes advanced components for **production-quality code generation**:
+
+| Component              | Description                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| **AnalyzerAgent**      | Analyzes your codebase before generation (conventions, frameworks, patterns, tests) |
+| **ValidationPipeline** | Integrated TypeScript + ESLint + Security scanning after each change                |
+| **FeedbackLoop**       | Intelligent retry with exponential backoff and max iterations                       |
+| **ErrorMemory**        | Learns from errors across sessions to suggest fixes faster                          |
+| **TDDWorkflow**        | Test-driven development with RED → GREEN → REFACTOR phases                          |
+| **RefactorAgent**      | Detects code smells and suggests optimizations post-review                          |
+| **DocAgent**           | Generates README, API docs, and architecture diagrams                               |
+
+#### How It Works
+
+```
+1. INIT     → AnalyzerAgent scans codebase, creates TechContextDocument
+2. EXPLAIN  → Plan generation with trust-based privileges
+3. SNAPSHOT → Safety backup before execution
+4. EXECUTE  → Agents run with shared context
+5. VALIDATE → ValidationPipeline checks types, lint, security
+6. REPORT   → ErrorMemory records patterns for learning
+```
+
+#### Error Learning
+
+ErrorMemory persists error patterns to `.devora/error-memory.json`:
+
+- Tracks error frequency across sessions
+- Suggests fixes based on history
+- Improves over time with each correction
+
 ### 🔧 Quick Commands
 
 ```bash
