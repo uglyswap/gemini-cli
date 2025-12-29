@@ -539,11 +539,19 @@ function convertToOpenAIFormat(
       if (functionCalls.length > 0 && role === 'assistant') {
         const toolCalls = functionCalls
           .map((part: Part, index: number) => {
-            const functionCall = part.functionCall;
+            const functionCall = part.functionCall as {
+              name?: string;
+              args?: unknown;
+              id?: string;
+            };
             if (!functionCall) return null;
 
+            // Use id if available, otherwise generate a unique ID
+            // This ID must match the tool_call_id in the corresponding tool response
+            const callId = functionCall.id || `call_${index}`;
+
             return {
-              id: functionCall.id || `call_${index}`,
+              id: callId,
               type: 'function' as const,
               function: {
                 name: functionCall.name || '',
@@ -566,11 +574,22 @@ function convertToOpenAIFormat(
       );
 
       if (functionResponses.length > 0 && role === 'tool') {
-        return functionResponses.map((part: Part, index: number) => ({
-          role: 'tool' as const,
-          tool_call_id: part.functionResponse?.name || `call_${index}`,
-          content: JSON.stringify(part.functionResponse?.response || {}),
-        }));
+        return functionResponses.map((part: Part, index: number) => {
+          const funcResponse = part.functionResponse as {
+            name?: string;
+            response?: unknown;
+            id?: string;
+          };
+          // Use id if available, otherwise fall back to name-based ID for compatibility
+          // Anthropic requires tool_call_id to match the id from the tool_calls message
+          const toolCallId =
+            funcResponse?.id || funcResponse?.name || `call_${index}`;
+          return {
+            role: 'tool' as const,
+            tool_call_id: toolCallId,
+            content: JSON.stringify(funcResponse?.response || {}),
+          };
+        });
       }
 
       // Handle text parts
