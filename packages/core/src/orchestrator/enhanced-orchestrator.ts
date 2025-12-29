@@ -25,6 +25,15 @@ import { AgentSessionManager } from '../agents/session/agent-session-manager.js'
 import type { Config } from '../config/config.js';
 import type { ContentGenerator } from '../core/contentGenerator.js';
 
+// New components for enhanced workflow
+import {
+  AnalyzerAgent,
+  type TechContextDocument,
+} from '../agents/analyzer/analyzer-agent.js';
+import { ValidationPipeline } from '../validation/validation-pipeline.js';
+import { FeedbackLoop } from '../feedback/feedback-loop.js';
+import { ErrorMemory } from '../feedback/error-memory.js';
+
 /**
  * Enhanced Agent Orchestrator
  *
@@ -43,6 +52,13 @@ export class EnhancedAgentOrchestrator {
   private readonly gateRunner: GateRunner;
   private readonly sessionManager: AgentSessionManager;
   private readonly config: OrchestratorConfig;
+
+  // New components for enhanced workflow
+  private readonly analyzerAgent: AnalyzerAgent;
+  private readonly validationPipeline: ValidationPipeline;
+  private readonly feedbackLoop: FeedbackLoop;
+  private readonly errorMemory: ErrorMemory;
+  private techContext: TechContextDocument | null = null;
 
   private currentPhase: ExecutionPhase = 'INIT';
   private phaseCallbacks: PhaseCallback[] = [];
@@ -82,6 +98,23 @@ export class EnhancedAgentOrchestrator {
       workingDirectory: workingDir,
       maxConcurrentSessions: 5,
       reuseAgentSessions: true,
+    });
+
+    // Initialize new enhanced workflow components
+    this.analyzerAgent = new AnalyzerAgent();
+    this.validationPipeline = new ValidationPipeline({
+      enableTypeCheck: true,
+      enableLint: true,
+      enableSecurity: true,
+      enableTests: false, // Tests run separately
+    });
+    this.feedbackLoop = new FeedbackLoop({
+      maxIterations: orchestratorConfig.maxRetryIterations || 5,
+      exponentialBackoff: true,
+    });
+    this.errorMemory = new ErrorMemory({
+      persistPath: `${workingDir}/.devora/error-memory.json`,
+      autoPersist: true,
     });
 
     // Subscribe to session events and store unsubscribe function for cleanup
@@ -133,8 +166,14 @@ export class EnhancedAgentOrchestrator {
     const agentExecutions: AgentExecution[] = [];
 
     try {
-      // Phase 1: INIT - Select agents
+      // Phase 1: INIT - Analyze codebase and select agents
       await this.setPhase('INIT');
+
+      // Analyze codebase for tech context (used by agents)
+      const workingDir =
+        this.config.workingDirectory || this.config.projectRoot;
+      this.techContext = await this.analyzerAgent.analyze(workingDir);
+
       const selectionResult = this.agentSelector.selectAgents(task);
       const orderedAgentsList = this.agentSelector.getExecutionOrder(
         selectionResult.agents,
@@ -234,20 +273,44 @@ export class EnhancedAgentOrchestrator {
         }
       }
 
-      // Phase 5: VALIDATE - Run quality gates
+      // Phase 5: VALIDATE - Run quality gates and validation pipeline
       await this.setPhase('VALIDATE');
       const gateWorkingDir =
         this.config.workingDirectory || this.config.projectRoot;
+      const modifiedFiles = agentExecutions.flatMap(
+        (e) => e.filesModified || [],
+      );
+
+      // Run enhanced validation pipeline first
+      const validationResult =
+        await this.validationPipeline.run(gateWorkingDir);
+
+      // Record errors in memory for learning
+      for (const step of validationResult.steps) {
+        for (const issue of step.issues.filter((i) => i.type === 'error')) {
+          this.errorMemory.recordError({
+            id: `${step.step}_${issue.line || 0}`,
+            category: this.mapValidationCategory(step.step),
+            message: issue.message,
+            file: issue.file,
+            line: issue.line,
+            occurrenceCount: 1,
+            autoFixable: false,
+          });
+        }
+      }
+
+      // Run traditional quality gates
       const gateContext = {
         projectRoot: gateWorkingDir,
-        modifiedFiles: agentExecutions.flatMap((e) => e.filesModified || []),
+        modifiedFiles,
         agentId: 'orchestrator',
         taskDescription: task,
         trustLevel: TrustLevel.L2_GUIDED,
         options: {},
       };
       const gateResults = await this.gateRunner.runPostGates(gateContext);
-      const allGatesPassed = gateResults.passed;
+      const allGatesPassed = gateResults.passed && validationResult.success;
 
       // Rollback if validation failed and we have a snapshot
       if (
@@ -574,6 +637,11 @@ export class EnhancedAgentOrchestrator {
   ): string {
     const stepInfo = plan.steps?.find((s) => s.agentId === agent.id);
 
+    // Include tech context if available
+    const techContextSection = this.techContext
+      ? this.analyzerAgent.generateContextSummary(this.techContext)
+      : '';
+
     return `
 # Task Assignment for ${agent.name}
 
@@ -588,17 +656,66 @@ As the ${agent.name}, focus on the ${agent.domain} aspects of this task.
 - Trust Level: ${stepInfo?.trustLevel || 'unknown'}
 - Complexity: ${stepInfo?.estimatedComplexity || 'unknown'}
 
+${techContextSection ? `## Project Tech Context\n${techContextSection}\n` : ''}
+
 ## Your Responsibilities
 ${agent.qualityChecks.map((check) => `- ${check}`).join('\n')}
 
 ## Instructions
 1. Analyze the task from your specialized perspective
-2. Execute only actions within your domain
-3. Report your findings and any changes made
-4. Flag any concerns or issues for review
+2. Follow the project's coding conventions detected above
+3. Execute only actions within your domain
+4. Report your findings and any changes made
+5. Flag any concerns or issues for review
 
 Begin your analysis and execution now.
 `.trim();
+  }
+
+  /**
+   * Map validation step to error category
+   */
+  private mapValidationCategory(
+    step: string,
+  ):
+    | 'type_error'
+    | 'lint_error'
+    | 'security_error'
+    | 'test_failure'
+    | 'unknown' {
+    switch (step.toLowerCase()) {
+      case 'typecheck':
+        return 'type_error';
+      case 'lint':
+        return 'lint_error';
+      case 'security':
+        return 'security_error';
+      case 'tests':
+        return 'test_failure';
+      default:
+        return 'unknown';
+    }
+  }
+
+  /**
+   * Get the current tech context (for external access)
+   */
+  getTechContext(): TechContextDocument | null {
+    return this.techContext;
+  }
+
+  /**
+   * Get error memory statistics
+   */
+  getErrorMemoryStats() {
+    return this.errorMemory.getStats();
+  }
+
+  /**
+   * Get the feedback loop for external access (e.g., retry workflows)
+   */
+  getFeedbackLoop(): FeedbackLoop {
+    return this.feedbackLoop;
   }
 
   /**

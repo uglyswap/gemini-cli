@@ -243,6 +243,8 @@ export interface OrchestratorConfig {
   agentTimeoutMs?: number;
   /** Enable diff validation after agent execution */
   enableDiffValidation: boolean;
+  /** Maximum retry iterations for the feedback loop (default: 5) */
+  maxRetryIterations?: number;
   /** Model configuration */
   modelConfig: {
     fastModel: string;

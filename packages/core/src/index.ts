@@ -213,3 +213,69 @@ export type {
   FileMetrics,
   DiffValidatorConfig,
 } from './validation/diff-validator.js';
+export { ValidationPipeline } from './validation/validation-pipeline.js';
+export type {
+  PipelineResult,
+  PipelineIssue,
+  PipelineConfig,
+  ValidationStepResult,
+} from './validation/validation-pipeline.js';
+
+// Export analyzer agent
+export { AnalyzerAgent } from './agents/analyzer/analyzer-agent.js';
+export type {
+  TechContextDocument,
+  CodeConventions,
+  FrameworkInfo,
+  PatternInfo,
+  TestInfo,
+  AnalyzerConfig,
+} from './agents/analyzer/analyzer-agent.js';
+
+// Export feedback system
+export { FeedbackLoop } from './feedback/feedback-loop.js';
+export type {
+  FeedbackLoopResult,
+  RetryStrategy,
+  RetryContext,
+  FeedbackError,
+  IterationResult,
+} from './feedback/feedback-loop.js';
+export { ErrorMemory } from './feedback/error-memory.js';
+export type {
+  ErrorPattern,
+  SuccessfulFix,
+  FixSuggestion,
+  ErrorMemoryConfig,
+  MemoryStats,
+} from './feedback/error-memory.js';
+
+// Export TDD workflow
+export { TDDWorkflow } from './workflows/tdd-workflow.js';
+export type {
+  TDDWorkflowResult,
+  TDDPhase,
+  TestSpecification,
+  TestBehavior,
+  TDDConfig,
+} from './workflows/tdd-workflow.js';
+
+// Export refactor agent
+export { RefactorAgent } from './agents/refactor/refactor-agent.js';
+export type {
+  RefactorReport,
+  CodeSmell,
+  RefactorSuggestion,
+  FileAnalysisResult,
+  RefactorConfig,
+} from './agents/refactor/refactor-agent.js';
+
+// Export documentation agent
+export { DocAgent } from './agents/documentation/doc-agent.js';
+export type {
+  GeneratedDoc,
+  DocType,
+  FunctionDoc,
+  APIEndpointDoc,
+  DocAgentConfig,
+} from './agents/documentation/doc-agent.js';
