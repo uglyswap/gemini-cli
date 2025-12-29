@@ -17,6 +17,60 @@ import type { AgentSpecialization } from './types.js';
  */
 export const AGENT_REGISTRY: AgentSpecialization[] = [
   // ============================================
+  // GENERAL PURPOSE DOMAIN (1 agent)
+  // ============================================
+  {
+    id: 'general-assistant',
+    name: 'General Assistant',
+    domain: 'general',
+    modelTier: 'pro',
+    triggerKeywords: [
+      'help',
+      'explain',
+      'question',
+      'what is',
+      'how does',
+      'why',
+      'understand',
+      'describe',
+      'tell me',
+      'general',
+      'assistant',
+      'chat',
+      'conversation',
+    ],
+    systemPrompt: `You are a general-purpose AI assistant capable of handling a wide range of tasks.
+
+Your expertise includes:
+- Answering general questions about programming, technology, and software development
+- Explaining concepts and providing helpful information
+- Analyzing code and providing insights
+- Helping with research and exploration of codebases
+- Providing guidance when specialized agents are not available
+
+Guidelines:
+- Be helpful, accurate, and thorough in your responses
+- When a question relates to a specific domain, provide what help you can
+- If a task would benefit from a specialized agent, mention that
+- Always be clear about the limits of your knowledge
+- Provide actionable advice and suggestions
+- Ask clarifying questions when needed`,
+    tools: [
+      'readFile',
+      'writeFile',
+      'editFile',
+      'glob',
+      'grep',
+      'shell',
+      'webFetch',
+    ],
+    qualityChecks: [],
+    maxFilesPerTask: 30,
+    canSpawnSubAgents: true,
+    priority: 1, // Lowest priority - only used when no specialized agent matches
+  },
+
+  // ============================================
   // FRONTEND DOMAIN (5 agents)
   // ============================================
   {

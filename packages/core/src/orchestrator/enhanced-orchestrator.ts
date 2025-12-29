@@ -33,7 +33,7 @@ import {
   type TechContextDocument,
 } from '../agents/analyzer/analyzer-agent.js';
 import { ValidationPipeline } from '../validation/validation-pipeline.js';
-import { FeedbackLoop } from '../feedback/feedback-loop.js';
+import { FeedbackLoop, type FeedbackError } from '../feedback/feedback-loop.js';
 import { ErrorMemory } from '../feedback/error-memory.js';
 
 /**
@@ -283,7 +283,7 @@ export class EnhancedAgentOrchestrator {
         }
       }
 
-      // Phase 5: VALIDATE - Run quality gates and validation pipeline
+      // Phase 5: VALIDATE - Run quality gates and validation pipeline with feedback loop
       await this.setPhase('VALIDATE');
       const gateWorkingDir =
         this.config.workingDirectory || this.config.projectRoot;
@@ -291,26 +291,93 @@ export class EnhancedAgentOrchestrator {
         (e) => e.filesModified || [],
       );
 
-      // Run enhanced validation pipeline first
-      const validationResult =
-        await this.validationPipeline.run(gateWorkingDir);
+      // Use FeedbackLoop to attempt automatic error correction
+      const feedbackResult = await this.feedbackLoop.run(
+        // Execute iteration: run validation pipeline
+        async () => {
+          const validationResult =
+            await this.validationPipeline.run(gateWorkingDir);
 
-      // Record errors in memory for learning
-      for (const step of validationResult.steps) {
-        for (const issue of step.issues.filter((i) => i.type === 'error')) {
-          this.errorMemory.recordError({
-            id: `${step.step}_${issue.line || 0}`,
-            category: this.mapValidationCategory(step.step),
-            message: issue.message,
-            file: issue.file,
-            line: issue.line,
-            occurrenceCount: 1,
-            autoFixable: false,
-          });
-        }
-      }
+          // Collect all errors from validation steps
+          const allErrors = validationResult.steps.flatMap((step) =>
+            step.issues.filter((i) => i.type === 'error'),
+          );
 
-      // Run traditional quality gates
+          // Record errors in memory for learning
+          for (const step of validationResult.steps) {
+            for (const issue of step.issues.filter((i) => i.type === 'error')) {
+              this.errorMemory.recordError({
+                id: `${step.step}_${issue.line || 0}`,
+                category: this.mapValidationCategory(step.step),
+                message: issue.message,
+                file: issue.file,
+                line: issue.line,
+                occurrenceCount: 1,
+                autoFixable: false,
+              });
+            }
+          }
+
+          return {
+            success: validationResult.success,
+            errors: allErrors,
+          };
+        },
+        // Retry strategy: use agents to fix errors
+        async (errors, iteration, context) => {
+          if (errors.length === 0) return [];
+
+          // Build error summary for agents
+          const errorSummary = errors
+            .map(
+              (e) => `- ${e.file || 'unknown'}:${e.line || '?'}: ${e.message}`,
+            )
+            .join('\n');
+
+          const fixTask = `
+Fix the following validation errors (iteration ${iteration}/${this.feedbackLoop.getConfig().maxIterations}):
+
+${errorSummary}
+
+Previous iterations: ${context.previousIterations.length}
+Please analyze and fix these errors.
+          `.trim();
+
+          // Re-execute relevant agents to fix errors
+          if (!plan) {
+            // No plan available, cannot re-execute agents
+            return [];
+          }
+
+          for (const agentInfo of orderedAgents) {
+            const agent = getAgentById(agentInfo.agent.id);
+            if (!agent) continue;
+
+            // Only use agents that can help with the error types
+            const canHelp = this.agentCanFixErrors(agent, errors);
+            if (!canHelp) continue;
+
+            const execution = await this.executeAgent(agent, fixTask, plan);
+            agentExecutions.push(execution);
+          }
+
+          return errors.map((error) => ({
+            errorId: error.id,
+            type: 'code_change' as const,
+            description: `Agent attempted fix for: ${error.message}`,
+            file: error.file,
+            success: false, // Will be determined by next validation
+          }));
+        },
+        // Context
+        {
+          previousIterations: [],
+          taskDescription: task,
+          workingDirectory: gateWorkingDir,
+        },
+      );
+
+      // Run traditional quality gates after feedback loop
       const gateContext = {
         projectRoot: gateWorkingDir,
         modifiedFiles,
@@ -320,9 +387,9 @@ export class EnhancedAgentOrchestrator {
         options: {},
       };
       const gateResults = await this.gateRunner.runPostGates(gateContext);
-      const allGatesPassed = gateResults.passed && validationResult.success;
+      const allGatesPassed = gateResults.passed && feedbackResult.success;
 
-      // Rollback if validation failed and we have a snapshot
+      // Only rollback if FeedbackLoop failed AND we have a snapshot
       if (
         !allGatesPassed &&
         snapshotId &&
@@ -705,6 +772,36 @@ Begin your analysis and execution now.
       default:
         return 'unknown';
     }
+  }
+
+  /**
+   * Determine if an agent can help fix specific error types
+   */
+  private agentCanFixErrors(
+    agent: SpecializedAgent,
+    errors: FeedbackError[],
+  ): boolean {
+    // Map agent domains to error categories they can fix
+    const domainToErrorCategories: Record<string, string[]> = {
+      frontend: ['type_error', 'lint_error', 'syntax_error'],
+      backend: ['type_error', 'lint_error', 'syntax_error', 'runtime_error'],
+      security: ['security_error'],
+      testing: ['test_failure'],
+      database: ['type_error', 'configuration_error'],
+      devops: ['configuration_error', 'dependency_error'],
+      'ai-ml': ['type_error', 'lint_error'],
+      documentation: [], // Documentation agents don't fix code errors
+      general: ['type_error', 'lint_error', 'syntax_error', 'runtime_error'], // General can attempt any code fix
+    };
+
+    const agentCategories = domainToErrorCategories[agent.domain] || [
+      'type_error',
+      'lint_error',
+    ];
+    const errorCategories = new Set(errors.map((e) => e.category));
+
+    // Check if agent can fix any of the error categories
+    return agentCategories.some((cat) => errorCategories.has(cat as never));
   }
 
   /**
