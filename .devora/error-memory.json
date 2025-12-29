@@ -6,9 +6,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\commands\\\\extensions.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.894Z",
-      "lastSeen": "2025-12-29T17:05:56.270Z",
+      "lastSeen": "2025-12-29T18:29:57.003Z",
       "successfulFixes": []
     },
     {
@@ -16,9 +16,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\config.*\\.ts$",
-      "occurrences": 156,
+      "occurrences": 208,
       "firstSeen": "2025-12-29T16:54:19.895Z",
-      "lastSeen": "2025-12-29T17:05:56.286Z",
+      "lastSeen": "2025-12-29T18:29:57.018Z",
       "successfulFixes": []
     },
     {
@@ -26,9 +26,9 @@
       "category": "lint_error",
       "messagePattern": "Expect must be called inside a test block",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\config\\\\extensions.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.898Z",
-      "lastSeen": "2025-12-29T17:05:56.276Z",
+      "lastSeen": "2025-12-29T18:29:57.008Z",
       "successfulFixes": []
     },
     {
@@ -36,9 +36,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src.*\\.tsx$",
-      "occurrences": 111,
+      "occurrences": 148,
       "firstSeen": "2025-12-29T16:54:19.905Z",
-      "lastSeen": "2025-12-29T17:05:56.308Z",
+      "lastSeen": "2025-12-29T18:29:57.041Z",
       "successfulFixes": []
     },
     {
@@ -46,9 +46,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\services.*\\.ts$",
-      "occurrences": 63,
+      "occurrences": 84,
       "firstSeen": "2025-12-29T16:54:19.908Z",
-      "lastSeen": "2025-12-29T17:05:56.297Z",
+      "lastSeen": "2025-12-29T18:29:57.030Z",
       "successfulFixes": []
     },
     {
@@ -56,9 +56,9 @@
       "category": "lint_error",
       "messagePattern": "Expect must be called inside a test block",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\services.*\\.ts$",
-      "occurrences": 18,
+      "occurrences": 24,
       "firstSeen": "2025-12-29T16:54:19.908Z",
-      "lastSeen": "2025-12-29T17:05:56.292Z",
+      "lastSeen": "2025-12-29T18:29:57.024Z",
       "successfulFixes": []
     },
     {
@@ -66,9 +66,9 @@
       "category": "lint_error",
       "messagePattern": "Expect must be called inside a test block",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui\\\\commands.*\\.ts$",
-      "occurrences": 15,
+      "occurrences": 20,
       "firstSeen": "2025-12-29T16:54:19.913Z",
-      "lastSeen": "2025-12-29T17:05:56.299Z",
+      "lastSeen": "2025-12-29T18:29:57.032Z",
       "successfulFixes": []
     },
     {
@@ -76,9 +76,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui\\\\commands.*\\.ts$",
-      "occurrences": 12,
+      "occurrences": 16,
       "firstSeen": "2025-12-29T16:54:19.914Z",
-      "lastSeen": "2025-12-29T17:05:56.300Z",
+      "lastSeen": "2025-12-29T18:29:57.033Z",
       "successfulFixes": []
     },
     {
@@ -86,9 +86,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui\\\\hooks.*\\.ts$",
-      "occurrences": 24,
+      "occurrences": 32,
       "firstSeen": "2025-12-29T16:54:19.918Z",
-      "lastSeen": "2025-12-29T17:05:56.307Z",
+      "lastSeen": "2025-12-29T18:29:57.040Z",
       "successfulFixes": []
     },
     {
@@ -96,9 +96,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui\\\\utils.*\\.ts$",
-      "occurrences": 78,
+      "occurrences": 104,
       "firstSeen": "2025-12-29T16:54:19.920Z",
-      "lastSeen": "2025-12-29T17:05:56.315Z",
+      "lastSeen": "2025-12-29T18:29:57.048Z",
       "successfulFixes": []
     },
     {
@@ -106,9 +106,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src.*\\.ts$",
-      "occurrences": 12,
+      "occurrences": 16,
       "firstSeen": "2025-12-29T16:54:19.925Z",
-      "lastSeen": "2025-12-29T17:05:56.316Z",
+      "lastSeen": "2025-12-29T18:29:57.049Z",
       "successfulFixes": []
     },
     {
@@ -116,9 +116,9 @@
       "category": "lint_error",
       "messagePattern": "Missing license header",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\agents\\\\specialized.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.925Z",
-      "lastSeen": "2025-12-29T17:05:56.317Z",
+      "lastSeen": "2025-12-29T18:29:57.050Z",
       "successfulFixes": []
     },
     {
@@ -126,9 +126,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\code_assist.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.926Z",
-      "lastSeen": "2025-12-29T17:05:56.317Z",
+      "lastSeen": "2025-12-29T18:29:57.050Z",
       "successfulFixes": []
     },
     {
@@ -136,9 +136,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\commands.*\\.ts$",
-      "occurrences": 9,
+      "occurrences": 12,
       "firstSeen": "2025-12-29T16:54:19.926Z",
-      "lastSeen": "2025-12-29T17:05:56.318Z",
+      "lastSeen": "2025-12-29T18:29:57.051Z",
       "successfulFixes": []
     },
     {
@@ -146,9 +146,9 @@
       "category": "lint_error",
       "messagePattern": "Unexpected iterable of non-Promise \\(non-\"Thenable\"\\) values passed to promise aggregator\\.",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\config.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.927Z",
-      "lastSeen": "2025-12-29T17:05:56.319Z",
+      "lastSeen": "2025-12-29T18:29:57.052Z",
       "successfulFixes": []
     },
     {
@@ -156,9 +156,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\core.*\\.ts$",
-      "occurrences": 54,
+      "occurrences": 72,
       "firstSeen": "2025-12-29T16:54:19.927Z",
-      "lastSeen": "2025-12-29T17:05:56.323Z",
+      "lastSeen": "2025-12-29T18:29:57.057Z",
       "successfulFixes": []
     },
     {
@@ -166,9 +166,9 @@
       "category": "lint_error",
       "messagePattern": "Unexpected any\\. Specify a different type\\.",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\hybrid.*\\.ts$",
-      "occurrences": 9,
+      "occurrences": 12,
       "firstSeen": "2025-12-29T16:54:19.931Z",
-      "lastSeen": "2025-12-29T17:05:56.324Z",
+      "lastSeen": "2025-12-29T18:29:57.058Z",
       "successfulFixes": []
     },
     {
@@ -176,9 +176,9 @@
       "category": "lint_error",
       "messagePattern": "A `require\\(\\)` style import is forbidden\\.",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\hybrid.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.932Z",
-      "lastSeen": "2025-12-29T17:05:56.325Z",
+      "lastSeen": "2025-12-29T18:29:57.058Z",
       "successfulFixes": []
     },
     {
@@ -186,9 +186,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid using require\\(\\)\\. Use ES6 imports instead\\.",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\hybrid.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.932Z",
-      "lastSeen": "2025-12-29T17:05:56.325Z",
+      "lastSeen": "2025-12-29T18:29:57.059Z",
       "successfulFixes": []
     },
     {
@@ -196,9 +196,9 @@
       "category": "lint_error",
       "messagePattern": "Missing license header",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\orchestrator.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.933Z",
-      "lastSeen": "2025-12-29T17:05:56.325Z",
+      "lastSeen": "2025-12-29T18:29:57.059Z",
       "successfulFixes": []
     },
     {
@@ -206,9 +206,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\policy.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.933Z",
-      "lastSeen": "2025-12-29T17:05:56.326Z",
+      "lastSeen": "2025-12-29T18:29:57.060Z",
       "successfulFixes": []
     },
     {
@@ -216,9 +216,9 @@
       "category": "lint_error",
       "messagePattern": "Missing license header",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\safety.*\\.ts$",
-      "occurrences": 9,
+      "occurrences": 12,
       "firstSeen": "2025-12-29T16:54:19.934Z",
-      "lastSeen": "2025-12-29T17:05:56.328Z",
+      "lastSeen": "2025-12-29T18:29:57.061Z",
       "successfulFixes": []
     },
     {
@@ -226,9 +226,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\safety\\\\quality-gates.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.934Z",
-      "lastSeen": "2025-12-29T17:05:56.327Z",
+      "lastSeen": "2025-12-29T18:29:57.061Z",
       "successfulFixes": []
     },
     {
@@ -236,9 +236,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\services.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.935Z",
-      "lastSeen": "2025-12-29T17:05:56.328Z",
+      "lastSeen": "2025-12-29T18:29:57.062Z",
       "successfulFixes": []
     },
     {
@@ -246,9 +246,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\telemetry.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.936Z",
-      "lastSeen": "2025-12-29T17:05:56.329Z",
+      "lastSeen": "2025-12-29T18:29:57.063Z",
       "successfulFixes": []
     },
     {
@@ -256,9 +256,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\tools.*\\.ts$",
-      "occurrences": 147,
+      "occurrences": 196,
       "firstSeen": "2025-12-29T16:54:19.936Z",
-      "lastSeen": "2025-12-29T17:05:56.346Z",
+      "lastSeen": "2025-12-29T18:29:57.080Z",
       "successfulFixes": []
     },
     {
@@ -266,9 +266,9 @@
       "category": "lint_error",
       "messagePattern": "Unexpected iterable of non-Promise \\(non-\"Thenable\"\\) values passed to promise aggregator\\.",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\tools.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.939Z",
-      "lastSeen": "2025-12-29T17:05:56.333Z",
+      "lastSeen": "2025-12-29T18:29:57.067Z",
       "successfulFixes": []
     },
     {
@@ -276,9 +276,9 @@
       "category": "lint_error",
       "messagePattern": "Mocks should not be manually imported from a __mocks__ directory\\. Instead use `vi\\.mock` and import from the original module path",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\tools.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.946Z",
-      "lastSeen": "2025-12-29T17:05:56.343Z",
+      "lastSeen": "2025-12-29T18:29:57.077Z",
       "successfulFixes": []
     },
     {
@@ -286,9 +286,9 @@
       "category": "lint_error",
       "messagePattern": "Expect must be called inside a test block",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\tools.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.946Z",
-      "lastSeen": "2025-12-29T17:05:56.343Z",
+      "lastSeen": "2025-12-29T18:29:57.077Z",
       "successfulFixes": []
     },
     {
@@ -296,9 +296,9 @@
       "category": "lint_error",
       "messagePattern": "Missing license header",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\trust.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.949Z",
-      "lastSeen": "2025-12-29T17:05:56.346Z",
+      "lastSeen": "2025-12-29T18:29:57.080Z",
       "successfulFixes": []
     },
     {
@@ -306,9 +306,9 @@
       "category": "lint_error",
       "messagePattern": "Avoid calling `expect` inside conditional statements",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\core\\\\src\\\\utils.*\\.ts$",
-      "occurrences": 96,
+      "occurrences": 128,
       "firstSeen": "2025-12-29T16:54:19.949Z",
-      "lastSeen": "2025-12-29T17:05:56.355Z",
+      "lastSeen": "2025-12-29T18:29:57.089Z",
       "successfulFixes": []
     },
     {
@@ -316,9 +316,9 @@
       "category": "security_error",
       "messagePattern": "Debugger statement found",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\bundle.*\\.js$",
-      "occurrences": 27,
+      "occurrences": 36,
       "firstSeen": "2025-12-29T16:54:19.957Z",
-      "lastSeen": "2025-12-29T17:05:56.358Z",
+      "lastSeen": "2025-12-29T18:29:57.092Z",
       "successfulFixes": []
     },
     {
@@ -326,9 +326,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\bundle.*\\.js$",
-      "occurrences": 222,
+      "occurrences": 296,
       "firstSeen": "2025-12-29T16:54:19.960Z",
-      "lastSeen": "2025-12-29T17:05:56.379Z",
+      "lastSeen": "2025-12-29T18:29:57.112Z",
       "successfulFixes": []
     },
     {
@@ -336,9 +336,9 @@
       "category": "security_error",
       "messagePattern": "Potential hardcoded secret or API key",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\bundle.*\\.js$",
-      "occurrences": 54,
+      "occurrences": 72,
       "firstSeen": "2025-12-29T16:54:19.980Z",
-      "lastSeen": "2025-12-29T17:05:56.384Z",
+      "lastSeen": "2025-12-29T18:29:57.117Z",
       "successfulFixes": []
     },
     {
@@ -346,9 +346,9 @@
       "category": "security_error",
       "messagePattern": "Use of eval\\(\\) detected - potential security risk",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\bundle.*\\.js$",
-      "occurrences": 15,
+      "occurrences": 20,
       "firstSeen": "2025-12-29T16:54:19.985Z",
-      "lastSeen": "2025-12-29T17:05:56.386Z",
+      "lastSeen": "2025-12-29T18:29:57.119Z",
       "successfulFixes": []
     },
     {
@@ -356,9 +356,9 @@
       "category": "security_error",
       "messagePattern": "Debugger statement found",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli.*\\.js$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.987Z",
-      "lastSeen": "2025-12-29T17:05:56.386Z",
+      "lastSeen": "2025-12-29T18:29:57.119Z",
       "successfulFixes": []
     },
     {
@@ -366,9 +366,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\a2a-server\\\\src\\\\http.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.987Z",
-      "lastSeen": "2025-12-29T17:05:56.386Z",
+      "lastSeen": "2025-12-29T18:29:57.120Z",
       "successfulFixes": []
     },
     {
@@ -376,9 +376,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\commands\\\\extensions.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.987Z",
-      "lastSeen": "2025-12-29T17:05:56.387Z",
+      "lastSeen": "2025-12-29T18:29:57.120Z",
       "successfulFixes": []
     },
     {
@@ -386,9 +386,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\commands\\\\mcp.*\\.ts$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.988Z",
-      "lastSeen": "2025-12-29T17:05:56.387Z",
+      "lastSeen": "2025-12-29T18:29:57.121Z",
       "successfulFixes": []
     },
     {
@@ -396,9 +396,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\config.*\\.ts$",
-      "occurrences": 9,
+      "occurrences": 12,
       "firstSeen": "2025-12-29T16:54:19.988Z",
-      "lastSeen": "2025-12-29T17:05:56.388Z",
+      "lastSeen": "2025-12-29T18:29:57.122Z",
       "successfulFixes": []
     },
     {
@@ -406,9 +406,9 @@
       "category": "security_error",
       "messagePattern": "Potential hardcoded secret or API key",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui.*\\.tsx$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.989Z",
-      "lastSeen": "2025-12-29T17:05:56.389Z",
+      "lastSeen": "2025-12-29T18:29:57.122Z",
       "successfulFixes": []
     },
     {
@@ -416,9 +416,9 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui.*\\.tsx$",
-      "occurrences": 3,
+      "occurrences": 4,
       "firstSeen": "2025-12-29T16:54:19.990Z",
-      "lastSeen": "2025-12-29T17:05:56.389Z",
+      "lastSeen": "2025-12-29T18:29:57.122Z",
       "successfulFixes": []
     },
     {
@@ -426,14 +426,14 @@
       "category": "security_error",
       "messagePattern": "Potential SQL injection vulnerability",
       "filePattern": "C:\\\\Users\\\\quent\\\\devora-cli\\\\packages\\\\cli\\\\src\\\\ui\\\\commands.*\\.ts$",
-      "occurrences": 6,
+      "occurrences": 8,
       "firstSeen": "2025-12-29T16:54:19.990Z",
-      "lastSeen": "2025-12-29T17:05:56.389Z",
+      "lastSeen": "2025-12-29T18:29:57.123Z",
       "successfulFixes": []
     }
   ],
   "stats": {
-    "totalErrorsProcessed": 1236
+    "totalErrorsProcessed": 1648
   },
-  "savedAt": "2025-12-29T17:05:56.389Z"
+  "savedAt": "2025-12-29T18:29:57.123Z"
 }
