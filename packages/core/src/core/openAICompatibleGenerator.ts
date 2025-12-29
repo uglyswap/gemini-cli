@@ -132,9 +132,24 @@ export function createOpenAICompatibleContentGenerator(
       > = new Map();
       let lastUsage: OpenAIUsage | undefined;
 
+      // Debug logging for OpenAI-compatible providers
+      const DEBUG_OPENAI_COMPAT =
+        process.env['DEBUG_OPENAI_COMPAT'] === 'true';
+
       for await (const chunk of stream) {
         const choice = chunk.choices?.[0];
         const delta = choice?.delta;
+
+        if (DEBUG_OPENAI_COMPAT) {
+          console.error(
+            '[DEBUG] Chunk:',
+            JSON.stringify({
+              finish_reason: choice?.finish_reason,
+              delta_content: delta?.content?.substring(0, 100),
+              delta_tool_calls: delta?.tool_calls,
+            }),
+          );
+        }
 
         // Accumulate tool call data
         if (delta?.tool_calls) {
@@ -167,10 +182,23 @@ export function createOpenAICompatibleContentGenerator(
         }
 
         // When finish_reason is set, emit accumulated tool calls
-        if (
-          choice?.finish_reason === 'tool_calls' &&
-          accumulatedToolCalls.size > 0
-        ) {
+        // Support both 'tool_calls' (OpenAI) and 'end_turn' (Anthropic via OpenRouter)
+        const finishReason = choice?.finish_reason as string | null | undefined;
+        const isToolCallFinish =
+          finishReason === 'tool_calls' ||
+          (finishReason === 'end_turn' && accumulatedToolCalls.size > 0) ||
+          (finishReason === 'stop' && accumulatedToolCalls.size > 0);
+
+        if (DEBUG_OPENAI_COMPAT && choice?.finish_reason) {
+          console.error(
+            '[DEBUG] Finish reason:',
+            choice.finish_reason,
+            'Accumulated tools:',
+            accumulatedToolCalls.size,
+          );
+        }
+
+        if (isToolCallFinish && accumulatedToolCalls.size > 0) {
           const parts: Part[] = [];
 
           for (const [, toolCall] of accumulatedToolCalls) {
