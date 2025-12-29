@@ -69,6 +69,11 @@ function mapModelName(model: string, baseUrl: string): string {
       'gemini-1.5-pro': 'google/gemini-pro-1.5',
       'gemini-1.5-flash': 'google/gemini-flash-1.5',
     };
+    // If model already has a provider prefix (contains '/'), use as-is
+    // Otherwise, check mapping or add 'google/' prefix for Gemini models
+    if (model.includes('/')) {
+      return model;
+    }
     return openRouterModels[model] || `google/${model}`;
   }
 
