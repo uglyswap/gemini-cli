@@ -139,3 +139,15 @@ export {
 } from './metrics.js';
 export { runInDevTraceSpan, type SpanMetadata } from './trace.js';
 export { startupProfiler, StartupProfiler } from './startupProfiler.js';
+export {
+  PerformanceTelemetry,
+  getTelemetry,
+  createTelemetry,
+  resetTelemetry,
+} from './performance-telemetry.js';
+export type {
+  MetricType,
+  TelemetryMetric,
+  AggregatedStats,
+  TelemetryConfig,
+} from './performance-telemetry.js';

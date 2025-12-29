@@ -113,6 +113,8 @@ export interface QualityGate {
   command?: string;
   /** Function to execute (if function-based) */
   checkFn?: (context: GateContext) => Promise<GateCheckResult>;
+  /** Function to parse command output (for test result parsing) */
+  parseOutput?: (output: string) => Record<string, unknown> | null;
 }
 
 /**

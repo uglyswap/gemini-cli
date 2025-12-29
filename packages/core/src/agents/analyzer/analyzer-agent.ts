@@ -16,6 +16,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 
 /**
  * Detected coding conventions
@@ -112,6 +113,22 @@ export interface TechContextDocument {
   analyzedAt: Date;
   /** Analysis duration in ms */
   analysisDurationMs: number;
+  /** Cache fingerprint for invalidation */
+  cacheFingerprint?: string;
+}
+
+/**
+ * Cache fingerprint for invalidation
+ */
+export interface CacheFingerprint {
+  /** Hash of key configuration files */
+  configHash: string;
+  /** Hash of package.json dependencies */
+  depsHash: string;
+  /** Total file count in tracked directories */
+  fileCount: number;
+  /** Timestamp of most recently modified file */
+  latestModification: number;
 }
 
 /**
@@ -163,6 +180,7 @@ const DEFAULT_ANALYZER_CONFIG: AnalyzerConfig = {
 export class AnalyzerAgent {
   private readonly config: AnalyzerConfig;
   private cachedContext: TechContextDocument | null = null;
+  private cachedFingerprint: CacheFingerprint | null = null;
 
   constructor(config: Partial<AnalyzerConfig> = {}) {
     this.config = { ...DEFAULT_ANALYZER_CONFIG, ...config };
@@ -174,13 +192,17 @@ export class AnalyzerAgent {
   async analyze(projectRoot: string): Promise<TechContextDocument> {
     const startTime = Date.now();
 
-    // Check cache
-    if (
-      this.cachedContext &&
-      this.cachedContext.projectRoot === projectRoot &&
-      Date.now() - this.cachedContext.analyzedAt.getTime() < 5 * 60 * 1000
-    ) {
-      return this.cachedContext;
+    // Check cache with fingerprint-based invalidation
+    if (this.cachedContext && this.cachedContext.projectRoot === projectRoot) {
+      const currentFingerprint = await this.computeFingerprint(projectRoot);
+      const isCacheValid = this.isFingerprintValid(currentFingerprint);
+
+      if (isCacheValid) {
+        // Cache is still valid
+        return this.cachedContext;
+      }
+      // Cache invalidated - fingerprint changed
+      console.log('[AnalyzerAgent] Cache invalidated due to file changes');
     }
 
     // Collect files
@@ -204,6 +226,10 @@ export class AnalyzerAgent {
     // Get project structure
     const structure = this.analyzeStructure(projectRoot, files);
 
+    // Compute and store fingerprint for cache invalidation
+    const fingerprint = await this.computeFingerprint(projectRoot);
+    this.cachedFingerprint = fingerprint;
+
     const context: TechContextDocument = {
       projectRoot,
       language,
@@ -214,10 +240,150 @@ export class AnalyzerAgent {
       structure,
       analyzedAt: new Date(),
       analysisDurationMs: Date.now() - startTime,
+      cacheFingerprint: this.serializeFingerprint(fingerprint),
     };
 
     this.cachedContext = context;
     return context;
+  }
+
+  /**
+   * Compute a fingerprint of key project files for cache invalidation
+   */
+  private async computeFingerprint(
+    projectRoot: string,
+  ): Promise<CacheFingerprint> {
+    const keyConfigFiles = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'eslint.config.js',
+      '.eslintrc.js',
+      '.prettierrc',
+    ];
+
+    let configHash = '';
+    let depsHash = '';
+    let latestModification = 0;
+
+    // Hash key config files
+    for (const configFile of keyConfigFiles) {
+      const filePath = path.join(projectRoot, configFile);
+      if (fs.existsSync(filePath)) {
+        try {
+          const stat = await fs.promises.stat(filePath);
+          latestModification = Math.max(latestModification, stat.mtimeMs);
+
+          // For package.json, compute deps hash
+          if (configFile === 'package.json') {
+            const content = await fs.promises.readFile(filePath, 'utf-8');
+            try {
+              const pkg = JSON.parse(content);
+              const deps = JSON.stringify({
+                dependencies: pkg.dependencies || {},
+                devDependencies: pkg.devDependencies || {},
+              });
+              depsHash = crypto.createHash('md5').update(deps).digest('hex');
+            } catch {
+              // Ignore JSON parse errors
+            }
+          }
+
+          // Add to config hash
+          configHash += `${configFile}:${stat.mtimeMs};`;
+        } catch {
+          // Ignore files that can't be read
+        }
+      }
+    }
+
+    // Hash the combined config string
+    const finalConfigHash = crypto
+      .createHash('md5')
+      .update(configHash)
+      .digest('hex');
+
+    // Count source files in src directory
+    let fileCount = 0;
+    const srcDir = path.join(projectRoot, 'src');
+    if (fs.existsSync(srcDir)) {
+      try {
+        const countFiles = async (dir: string): Promise<number> => {
+          let count = 0;
+          const entries = await fs.promises.readdir(dir, {
+            withFileTypes: true,
+          });
+          for (const entry of entries) {
+            if (
+              entry.isDirectory() &&
+              !this.config.excludeDirs.includes(entry.name)
+            ) {
+              count += await countFiles(path.join(dir, entry.name));
+            } else if (entry.isFile()) {
+              const ext = path.extname(entry.name);
+              if (this.config.includeExtensions.includes(ext)) {
+                count++;
+                // Check modification time
+                const stat = await fs.promises.stat(path.join(dir, entry.name));
+                latestModification = Math.max(latestModification, stat.mtimeMs);
+              }
+            }
+          }
+          return count;
+        };
+        fileCount = await countFiles(srcDir);
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    return {
+      configHash: finalConfigHash,
+      depsHash: depsHash || 'none',
+      fileCount,
+      latestModification,
+    };
+  }
+
+  /**
+   * Check if a fingerprint matches the cached one
+   */
+  private isFingerprintValid(current: CacheFingerprint): boolean {
+    if (!this.cachedFingerprint) return false;
+
+    // Check if config files changed
+    if (current.configHash !== this.cachedFingerprint.configHash) {
+      return false;
+    }
+
+    // Check if dependencies changed
+    if (current.depsHash !== this.cachedFingerprint.depsHash) {
+      return false;
+    }
+
+    // Check if file count changed significantly (new files added/removed)
+    const countDiff = Math.abs(
+      current.fileCount - this.cachedFingerprint.fileCount,
+    );
+    if (countDiff > 5) {
+      return false;
+    }
+
+    // Check if any file was modified after cache creation
+    if (
+      current.latestModification > this.cachedFingerprint.latestModification
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Serialize fingerprint for storage in context
+   */
+  private serializeFingerprint(fp: CacheFingerprint): string {
+    return `${fp.configHash}:${fp.depsHash}:${fp.fileCount}:${fp.latestModification}`;
   }
 
   /**
@@ -790,6 +956,57 @@ export class AnalyzerAgent {
    */
   clearCache(): void {
     this.cachedContext = null;
+    this.cachedFingerprint = null;
+  }
+
+  /**
+   * Invalidate cache for specific files
+   * Call this when you know specific files have changed
+   */
+  invalidateForFiles(files: string[]): boolean {
+    if (!this.cachedContext) return false;
+
+    // Check if any of the files are in a relevant directory
+    const relevantDirs = ['src', 'lib', 'app', 'test', 'tests'];
+    const hasRelevantFile = files.some((file) => {
+      const parts = file.split(/[/\\]/);
+      return parts.some((part) => relevantDirs.includes(part));
+    });
+
+    // Check if any config files changed
+    const configFiles = [
+      'package.json',
+      'tsconfig.json',
+      'eslint.config.js',
+      '.eslintrc.js',
+    ];
+    const hasConfigFile = files.some((file) => {
+      const fileName = path.basename(file);
+      return configFiles.includes(fileName);
+    });
+
+    if (hasRelevantFile || hasConfigFile) {
+      console.log('[AnalyzerAgent] Cache invalidated for changed files');
+      this.clearCache();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if cache is valid without computing full fingerprint
+   */
+  isCacheValid(): boolean {
+    return this.cachedContext !== null && this.cachedFingerprint !== null;
+  }
+
+  /**
+   * Get cache age in milliseconds
+   */
+  getCacheAge(): number | null {
+    if (!this.cachedContext) return null;
+    return Date.now() - this.cachedContext.analyzedAt.getTime();
   }
 
   /**
