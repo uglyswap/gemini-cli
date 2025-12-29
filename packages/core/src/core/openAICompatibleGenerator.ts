@@ -156,7 +156,7 @@ export function createOpenAICompatibleContentGenerator(
       // Accumulate tool calls across chunks (they come in pieces during streaming)
       const accumulatedToolCalls: Map<
         number,
-        { name: string; arguments: string }
+        { id: string; name: string; arguments: string }
       > = new Map();
       let lastUsage: OpenAIUsage | undefined;
 
@@ -180,10 +180,15 @@ export function createOpenAICompatibleContentGenerator(
           for (const toolCall of delta.tool_calls) {
             const index = toolCall.index;
             const existing = accumulatedToolCalls.get(index) || {
+              id: '',
               name: '',
               arguments: '',
             };
 
+            // Capture the tool call ID (comes in the first chunk for each tool)
+            if (toolCall.id) {
+              existing.id = toolCall.id;
+            }
             if (toolCall.function?.name) {
               existing.name = toolCall.function.name;
             }
@@ -250,6 +255,8 @@ export function createOpenAICompatibleContentGenerator(
                 functionCall: {
                   name: toolCall.name,
                   args: parsedArgs,
+                  // Pass the tool call ID so it can be matched with the tool result
+                  id: toolCall.id,
                 },
               });
             } catch (e) {
@@ -676,6 +683,8 @@ function convertToGeminiResponse(
           functionCall: {
             name: toolCall.function.name,
             args,
+            // Pass the tool call ID so it can be matched with the tool result
+            id: toolCall.id,
           },
         });
       }
