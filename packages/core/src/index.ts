@@ -171,9 +171,27 @@ export * from './utils/terminal.js';
 
 // Export specialized agents registry
 export { AGENT_REGISTRY } from './agents/specialized/agent-registry.js';
+export { AgentSelector } from './agents/specialized/agent-selector.js';
 export type {
   AgentSpecialization,
   SpecializedAgent,
   AgentDomain,
   ModelTier,
+  AgentSelectionResult,
+  TaskComplexity,
 } from './agents/specialized/types.js';
+
+// Export orchestration system
+export {
+  HybridModeManager,
+  createHybridModeManager,
+  DEFAULT_HYBRID_CONFIG,
+} from './hybrid/hybrid-mode-manager.js';
+export type { HybridModeConfig } from './hybrid/hybrid-mode-manager.js';
+export { EnhancedAgentOrchestrator } from './orchestrator/enhanced-orchestrator.js';
+export type {
+  ExecutionReport,
+  ExecutionPlan,
+  ExecutionPhase,
+  OrchestratorConfig,
+} from './orchestrator/types.js';

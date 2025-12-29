@@ -40,6 +40,15 @@ import {
   processRestorableToolCalls,
   recordToolCallInteractions,
 } from '@google/gemini-cli-core';
+
+// Import orchestration components directly from source until core is properly compiled
+// TODO: Replace with '@google/gemini-cli-core' imports once core build issues are resolved
+import { AgentSelector } from '@google/gemini-cli-core/src/agents/specialized/agent-selector.js';
+import { HybridModeManager } from '@google/gemini-cli-core/src/hybrid/hybrid-mode-manager.js';
+import type {
+  ExecutionPhase,
+  ExecutionReport,
+} from '@google/gemini-cli-core/src/orchestrator/types.js';
 import { type Part, type PartListUnion, FinishReason } from '@google/genai';
 import type {
   HistoryItem,
@@ -86,6 +95,94 @@ function showCitations(settings: LoadedSettings): boolean {
 }
 
 /**
+ * Format an ExecutionReport for display in the chat
+ */
+function formatExecutionReport(report: ExecutionReport): string {
+  const lines: string[] = [];
+
+  // Header with status
+  const statusEmoji = report.success ? '✅' : '❌';
+  lines.push(`## ${statusEmoji} Task Execution Report\n`);
+
+  // Task description
+  if (report.task) {
+    lines.push(`**Task:** ${report.task}\n`);
+  }
+
+  // Agent executions
+  const executions = report.executions || report.agentExecutions || [];
+  if (executions.length > 0) {
+    lines.push(`### Agent Contributions (${executions.length})\n`);
+    for (const execution of executions) {
+      const agentStatus = execution.success ? '✓' : '✗';
+      const output = execution.output?.slice(0, 200) || 'No output';
+      const truncated = (execution.output?.length ?? 0) > 200 ? '...' : '';
+      lines.push(
+        `- **${execution.agentName || execution.agentId}** ${agentStatus}: ${output}${truncated}`,
+      );
+      if (execution.error) {
+        lines.push(`  - Error: ${execution.error}`);
+      }
+    }
+    lines.push('');
+  }
+
+  // Files modified (collect from all executions)
+  const allModifiedFiles = new Set<string>();
+  for (const execution of executions) {
+    const files = execution.modifiedFiles || execution.filesModified || [];
+    files.forEach((f: string) => allModifiedFiles.add(f));
+  }
+  if (allModifiedFiles.size > 0) {
+    const filesArray = Array.from(allModifiedFiles);
+    lines.push(`### Files Modified (${filesArray.length})\n`);
+    for (const file of filesArray.slice(0, 10)) {
+      lines.push(`- \`${file}\``);
+    }
+    if (filesArray.length > 10) {
+      lines.push(`- ... and ${filesArray.length - 10} more files`);
+    }
+    lines.push('');
+  }
+
+  // Quality gates
+  const gateResults = report.qualityGateResults || report.gateResults || [];
+  if (gateResults.length > 0) {
+    lines.push(`### Quality Gates\n`);
+    for (const gate of gateResults as Array<{
+      name?: string;
+      passed?: boolean;
+      message?: string;
+    }>) {
+      const gateEmoji = gate.passed ? '✅' : '❌';
+      lines.push(
+        `- ${gateEmoji} **${gate.name || 'Gate'}**: ${gate.message || (gate.passed ? 'Passed' : 'Failed')}`,
+      );
+    }
+    lines.push('');
+  }
+
+  // Error message
+  if (!report.success && (report.failureReason || report.error)) {
+    lines.push(`### Error\n`);
+    lines.push(`❌ ${report.failureReason || report.error}\n`);
+  }
+
+  // Rollback info
+  if (report.rolledBack) {
+    lines.push(`\n⚠️ _Changes were rolled back due to errors._\n`);
+  }
+
+  // Execution time
+  const timeMs = report.totalTimeMs || report.totalDurationMs;
+  if (timeMs) {
+    lines.push(`\n_Execution completed in ${(timeMs / 1000).toFixed(2)}s_`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Manages the Gemini stream, including user input, command processing,
  * API interaction, and tool call lifecycle.
  */
@@ -129,6 +226,63 @@ export const useGeminiStream = (
     }
     return new GitService(config.getProjectRoot(), storage);
   }, [config, storage]);
+
+  // ========== ORCHESTRATION SYSTEM ==========
+  // Agent selector for analyzing task complexity and selecting specialized agents
+  const agentSelector = useMemo(
+    () => new AgentSelector({ minScoreThreshold: 5, debug: false }),
+    [],
+  );
+
+  // Hybrid mode manager for multi-agent orchestration
+  const orchestratorRef = useRef<HybridModeManager | null>(null);
+  const [isOrchestrating, setIsOrchestrating] = useState(false);
+  const [orchestrationPhase, setOrchestrationPhase] =
+    useState<ExecutionPhase | null>(null);
+
+  // Lazy initialization of orchestrator
+  const getOrchestrator = useCallback((): HybridModeManager => {
+    if (!orchestratorRef.current) {
+      const contentGenerator = config.getContentGenerator();
+      orchestratorRef.current = new HybridModeManager(
+        config,
+        contentGenerator,
+        {
+          enabled: config.isAgentsEnabled?.() ?? true,
+        },
+      );
+    }
+    return orchestratorRef.current;
+  }, [config]);
+
+  // Check if a task should use orchestration
+  const shouldUseOrchestration = useCallback(
+    (taskDescription: string): boolean => {
+      // Only analyze string queries (not tool responses)
+      if (typeof taskDescription !== 'string') return false;
+
+      // Check if agents are enabled in config
+      const agentsEnabled = config.isAgentsEnabled?.() ?? true;
+      if (!agentsEnabled) return false;
+
+      // Analyze task complexity and agent matching
+      const selection = agentSelector.selectAgents(taskDescription);
+
+      // Use orchestration if specialized agents matched
+      if (selection.agents.length > 0) {
+        debugLogger.log(
+          `[Orchestrator] Task matched ${selection.agents.length} agent(s): ` +
+            selection.agents.map((a) => a.name).join(', ') +
+            ` (complexity: ${selection.complexity})`,
+        );
+        return true;
+      }
+
+      return false;
+    },
+    [agentSelector, config],
+  );
+  // ========== END ORCHESTRATION SYSTEM ==========
 
   const [
     toolCalls,
@@ -952,6 +1106,78 @@ export const useGeminiStream = (
             lastPromptIdRef.current = prompt_id!;
 
             try {
+              // ========== ORCHESTRATION ROUTING ==========
+              // Check if this query should use multi-agent orchestration
+              // Only for new string queries, not tool response continuations
+              if (
+                typeof queryToSend === 'string' &&
+                !options?.isContinuation &&
+                shouldUseOrchestration(queryToSend)
+              ) {
+                // Route through the orchestration system
+                setIsOrchestrating(true);
+                const orchestrator = getOrchestrator();
+                const workingDirectory =
+                  config.getProjectRoot() || process.cwd();
+
+                try {
+                  // Show orchestration starting message
+                  addItem(
+                    {
+                      type: 'info',
+                      text: '🤖 Activating multi-agent orchestration system...',
+                    },
+                    userMessageTimestamp,
+                  );
+
+                  const report = await orchestrator.executeTask(
+                    queryToSend,
+                    workingDirectory,
+                    {
+                      onPhaseChange: (phase: ExecutionPhase) => {
+                        setOrchestrationPhase(phase);
+                        // Add phase update to history
+                        const phaseMessages: Partial<
+                          Record<ExecutionPhase, string>
+                        > = {
+                          INIT: '📋 Initializing task analysis...',
+                          EXPLAIN: '🔍 Agent explaining approach...',
+                          SNAPSHOT: '💾 Creating file snapshots...',
+                          EXECUTE:
+                            '⚡ Executing task with specialized agents...',
+                          VALIDATE: '✅ Running quality gates...',
+                          REPORT: '📊 Generating execution report...',
+                          ERROR: '❌ An error occurred...',
+                          ROLLBACK: '⏪ Rolling back changes...',
+                        };
+                        if (phaseMessages[phase]) {
+                          addItem(
+                            { type: 'info', text: phaseMessages[phase] },
+                            Date.now(),
+                          );
+                        }
+                      },
+                    },
+                  );
+
+                  // Display the execution report
+                  const reportContent = formatExecutionReport(report);
+                  addItem({ type: 'gemini', text: reportContent }, Date.now());
+
+                  // Log the successful orchestration
+                  debugLogger.log(
+                    `[Orchestrator] Task completed with success: ${report.success}`,
+                  );
+                } finally {
+                  setIsOrchestrating(false);
+                  setOrchestrationPhase(null);
+                  setIsResponding(false);
+                }
+
+                return; // Exit early, orchestration handled the request
+              }
+              // ========== END ORCHESTRATION ROUTING ==========
+
               const stream = geminiClient.sendMessageStream(
                 queryToSend,
                 abortSignal,
@@ -1054,6 +1280,8 @@ export const useGeminiStream = (
       config,
       startNewPrompt,
       getPromptCount,
+      shouldUseOrchestration,
+      getOrchestrator,
     ],
   );
 
@@ -1311,5 +1539,8 @@ export const useGeminiStream = (
     activePtyId,
     loopDetectionConfirmationRequest,
     lastOutputTime,
+    // Orchestration state
+    isOrchestrating,
+    orchestrationPhase,
   };
 };
