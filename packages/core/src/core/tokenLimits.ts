@@ -4,14 +4,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  getModelContextLimit,
+  DEFAULT_TOKEN_LIMIT as SERVICE_DEFAULT,
+} from '../services/modelContextService.js';
+
 type Model = string;
 type TokenCount = number;
 
-export const DEFAULT_TOKEN_LIMIT = 1_048_576;
+export const DEFAULT_TOKEN_LIMIT = SERVICE_DEFAULT;
 
+/**
+ * Get the token limit for a model.
+ * Uses the modelContextService to get cached/fetched limits,
+ * with fallback to known Gemini model limits.
+ */
 export function tokenLimit(model: Model): TokenCount {
-  // Add other models as they become relevant or if specified by config
-  // Pulled from https://ai.google.dev/gemini-api/docs/models
+  // First check the model context service (handles OpenAI-compatible providers)
+  const cachedLimit = getModelContextLimit(model);
+
+  // If service found a non-default limit, use it
+  if (cachedLimit !== SERVICE_DEFAULT) {
+    return cachedLimit;
+  }
+
+  // Fallback to hardcoded Gemini limits for models the service doesn't know
   switch (model) {
     case 'gemini-1.5-pro':
       return 2_097_152;

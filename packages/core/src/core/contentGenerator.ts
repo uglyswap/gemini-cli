@@ -25,6 +25,7 @@ import { parseCustomHeaders } from '../utils/customHeaderUtils.js';
 import { RecordingContentGenerator } from './recordingContentGenerator.js';
 import { getVersion, resolveModel } from '../../index.js';
 import { getConfigManager } from '../config/config-manager.js';
+import { fetchAndCacheModelContextLimits } from '../services/modelContextService.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -180,9 +181,20 @@ export async function createContentGenerator(
       config.authType === AuthType.USE_OPENAI_COMPATIBLE &&
       config.openAICompatibleBaseUrl
     ) {
-      const { createOpenAICompatibleContentGenerator } = await import(
-        './openAICompatibleGenerator.js'
-      );
+      const { createOpenAICompatibleContentGenerator } =
+        await import('./openAICompatibleGenerator.js');
+
+      // Fetch and cache model context limits for the provider
+      // This runs in background and does not block generator creation
+      const configManager = getConfigManager();
+      const providerId = configManager.getActiveProviderId();
+      fetchAndCacheModelContextLimits(
+        providerId || 'openrouter',
+        config.apiKey,
+        config.openAICompatibleBaseUrl,
+      ).catch(() => {
+        // Ignore errors - we will use fallback limits
+      });
       const version = await getVersion();
       const model = resolveModel(
         gcConfig.getModel(),
