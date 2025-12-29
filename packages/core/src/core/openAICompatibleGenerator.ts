@@ -102,6 +102,10 @@ export function createOpenAICompatibleContentGenerator(
       const messages = convertToOpenAIFormat(request);
       const systemInstruction = extractSystemInstruction(request);
 
+      // Build request options
+      // Z.AI/GLM requires tool_stream=true for streaming function calls
+      // This parameter is specific to z.ai and not part of OpenAI standard
+      const isZAI = baseUrl.includes('z.ai');
       const stream = await client.chat.completions.create({
         model: request.model || modelName,
         messages: systemInstruction
@@ -113,6 +117,7 @@ export function createOpenAICompatibleContentGenerator(
         tools: convertTools(request.config?.tools),
         stream: true,
         stream_options: { include_usage: true },
+        ...(isZAI ? { tool_stream: true } : {}),
       });
 
       // Accumulate tool calls across chunks (they come in pieces during streaming)
