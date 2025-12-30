@@ -20,6 +20,66 @@ import type { ContentGenerator } from '../../core/contentGenerator.js';
 import type { ToolRegistry } from '../../tools/tool-registry.js';
 
 /**
+ * Maximum characters per tool result to prevent context overflow.
+ * OpenRouter/Anthropic has ~200K token limit (~800K chars).
+ * With multiple tool calls and history, we limit each result aggressively.
+ */
+const MAX_TOOL_RESULT_CHARS = 30_000;
+
+/**
+ * Truncate a tool result to prevent context overflow.
+ * Preserves the beginning and end of the content for better context.
+ */
+function truncateToolResult(result: unknown): unknown {
+  if (result === null || result === undefined) {
+    return result;
+  }
+
+  // Handle string results
+  if (typeof result === 'string') {
+    if (result.length <= MAX_TOOL_RESULT_CHARS) {
+      return result;
+    }
+    const halfLimit = Math.floor(MAX_TOOL_RESULT_CHARS / 2) - 50;
+    const truncatedChars = result.length - MAX_TOOL_RESULT_CHARS;
+    return (
+      result.slice(0, halfLimit) +
+      `\n\n... [TRUNCATED: ${truncatedChars.toLocaleString()} characters removed] ...\n\n` +
+      result.slice(-halfLimit)
+    );
+  }
+
+  // Handle objects with output/content fields (common tool response patterns)
+  if (typeof result === 'object') {
+    const obj = result as Record<string, unknown>;
+
+    // Check common content fields
+    for (const key of ['output', 'content', 'text', 'result', 'data']) {
+      if (typeof obj[key] === 'string' && obj[key]) {
+        const truncated = truncateToolResult(obj[key]);
+        if (truncated !== obj[key]) {
+          return { ...obj, [key]: truncated };
+        }
+      }
+    }
+
+    // Stringify and check total size
+    const jsonStr = JSON.stringify(result);
+    if (jsonStr.length > MAX_TOOL_RESULT_CHARS) {
+      const halfLimit = Math.floor(MAX_TOOL_RESULT_CHARS / 2) - 50;
+      return {
+        _truncated: true,
+        _originalSize: jsonStr.length,
+        _removed: jsonStr.length - MAX_TOOL_RESULT_CHARS,
+        summary: `Object too large (${jsonStr.length.toLocaleString()} chars). First ${halfLimit} chars of JSON: ${jsonStr.slice(0, halfLimit)}...`,
+      };
+    }
+  }
+
+  return result;
+}
+
+/**
  * Safely extract args from a functionCall object.
  * Validates that args is a non-null object and returns it as Record<string, unknown>.
  * @param args - The args from functionCall (can be any type from the API)
@@ -188,7 +248,7 @@ export class AgentSession {
         const toolResults = await this.executeToolCalls(toolCalls, abortSignal);
         allToolCalls.push(...toolResults);
 
-        // Add tool results to history for the model
+        // Add tool results to history for the model (with truncation to prevent context overflow)
         const toolResultContent: Content = {
           role: 'user',
           parts: toolResults.map((tc) => ({
@@ -196,7 +256,9 @@ export class AgentSession {
               id: tc.id, // Required for OpenAI-compatible providers (e.g., Anthropic via OpenRouter)
               name: tc.name,
               response: {
-                result: tc.success ? tc.result : { error: tc.error },
+                result: tc.success
+                  ? truncateToolResult(tc.result)
+                  : { error: tc.error },
               },
             },
           })),
