@@ -1066,12 +1066,15 @@ Begin your analysis and execution now.
 
     if (errorCategories.has('unknown') || instructions.length === 0) {
       instructions.push(`
-### General Error Fix Guidelines:
+### General/Unknown Error Fix Guidelines:
 - Read the error message carefully - it often tells you exactly what's wrong
 - Check the line number and surrounding context
 - Look for similar patterns in the codebase that work correctly
 - Consider if recent changes might have broken something
 - Check imports and exports are correct
+- Verify file paths and references are valid
+- For HTML/CSS/JS: check syntax, missing closing tags, or typos
+- For new files: ensure all required dependencies are in place
 `);
     }
 
@@ -1086,21 +1089,36 @@ Begin your analysis and execution now.
     errors: FeedbackError[],
   ): boolean {
     // Map agent domains to error categories they can fix
+    // Note: 'unknown' errors are included for general/frontend/backend agents
+    // to allow them to attempt fixes on uncategorized errors
     const domainToErrorCategories: Record<string, string[]> = {
-      frontend: ['type_error', 'lint_error', 'syntax_error'],
-      backend: ['type_error', 'lint_error', 'syntax_error', 'runtime_error'],
+      frontend: ['type_error', 'lint_error', 'syntax_error', 'unknown'],
+      backend: [
+        'type_error',
+        'lint_error',
+        'syntax_error',
+        'runtime_error',
+        'unknown',
+      ],
       security: ['security_error'],
       testing: ['test_failure'],
       database: ['type_error', 'configuration_error'],
       devops: ['configuration_error', 'dependency_error'],
-      'ai-ml': ['type_error', 'lint_error'],
+      'ai-ml': ['type_error', 'lint_error', 'unknown'],
       documentation: [], // Documentation agents don't fix code errors
-      general: ['type_error', 'lint_error', 'syntax_error', 'runtime_error'], // General can attempt any code fix
+      general: [
+        'type_error',
+        'lint_error',
+        'syntax_error',
+        'runtime_error',
+        'unknown',
+      ], // General can attempt any code fix
     };
 
     const agentCategories = domainToErrorCategories[agent.domain] || [
       'type_error',
       'lint_error',
+      'unknown',
     ];
     const errorCategories = new Set(errors.map((e) => e.category));
 

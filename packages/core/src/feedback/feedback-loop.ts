@@ -146,6 +146,10 @@ export interface FeedbackLoopConfig {
 
 /**
  * Default configuration
+ *
+ * Note: 'unknown' is included in retryCategories to allow retry of errors
+ * that don't match specific patterns. This prevents false-positive rollbacks
+ * when validation errors can't be properly categorized.
  */
 const DEFAULT_CONFIG: FeedbackLoopConfig = {
   maxIterations: 5,
@@ -153,7 +157,13 @@ const DEFAULT_CONFIG: FeedbackLoopConfig = {
   maxDelayMs: 10000,
   exponentialBackoff: true,
   stopOnSuccess: true,
-  retryCategories: ['type_error', 'syntax_error', 'lint_error', 'test_failure'],
+  retryCategories: [
+    'type_error',
+    'syntax_error',
+    'lint_error',
+    'test_failure',
+    'unknown',
+  ],
   noRetryCategories: ['security_error', 'configuration_error'],
 };
 
@@ -588,7 +598,6 @@ export const defaultRetryStrategy: RetryStrategy = async (
 /**
  * Simple retry that just re-executes without changes
  */
-export const simpleRetryStrategy: RetryStrategy = async () => 
+export const simpleRetryStrategy: RetryStrategy = async () =>
   // No actions taken, just retry
-   []
-;
+  [];
