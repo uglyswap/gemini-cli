@@ -60,18 +60,20 @@ export type QualityCheck =
 
 /**
  * Tool identifiers available to agents
+ * These must match the actual tool names registered in tool-registry
+ * @see packages/core/src/tools/tool-names.ts for authoritative list
  */
 export type ToolId =
-  | 'readFile'
-  | 'writeFile'
-  | 'editFile'
+  | 'read_file'
+  | 'write_file'
+  | 'replace'
   | 'glob'
-  | 'grep'
-  | 'shell'
-  | 'webFetch'
-  | 'googleSearch'
-  | 'memory'
-  | 'listDirectory';
+  | 'search_file_content'
+  | 'run_shell_command'
+  | 'web_fetch'
+  | 'google_web_search'
+  | 'save_memory'
+  | 'list_directory';
 
 /**
  * Specialized agent definition

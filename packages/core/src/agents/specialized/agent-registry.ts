@@ -58,13 +58,13 @@ Guidelines:
 - Provide actionable advice and suggestions
 - Ask clarifying questions when needed`,
     tools: [
-      'readFile',
-      'writeFile',
-      'editFile',
+      'read_file',
+      'write_file',
+      'replace',
       'glob',
-      'grep',
-      'shell',
-      'webFetch',
+      'search_file_content',
+      'run_shell_command',
+      'web_fetch',
     ],
     qualityChecks: [],
     maxFilesPerTask: 30,
@@ -112,7 +112,14 @@ Guidelines:
 - Use semantic HTML elements
 - Implement proper error boundaries
 - Consider accessibility from the start`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['typescript', 'eslint', 'accessibility'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: true,
@@ -153,7 +160,7 @@ Guidelines:
 - Use design tokens for maintainability
 - Consider edge cases (empty states, loading, errors)
 - Follow platform conventions (iOS, Android, Web)`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob'],
+    tools: ['read_file', 'write_file', 'replace', 'glob'],
     qualityChecks: ['visual-regression', 'responsive', 'accessibility'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -193,7 +200,13 @@ Guidelines:
 - Ensure sufficient color contrast (4.5:1 minimum)
 - Test with screen readers (VoiceOver, NVDA)
 - Add skip links for complex navigation`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['accessibility'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: false,
@@ -237,7 +250,14 @@ Guidelines:
 - Consider mobile and slow network users
 - Use dynamic imports for route-based code splitting
 - Implement skeleton loaders for better perceived performance`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['performance-audit', 'bundle-analysis'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: false,
@@ -277,7 +297,7 @@ Guidelines:
 - Keep animations meaningful, not decorative
 - Consider animation timing and easing curves
 - Test animations on low-end devices`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob'],
+    tools: ['read_file', 'write_file', 'replace', 'glob'],
     qualityChecks: ['performance-audit', 'accessibility'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -322,7 +342,14 @@ Guidelines:
 - Follow REST naming conventions
 - Add request logging and tracing
 - Consider rate limiting for public endpoints`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['typescript', 'api-contract', 'security-scan'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: true,
@@ -361,7 +388,13 @@ Guidelines:
 - Consider API consumers' needs
 - Plan for deprecation from the start
 - Use hypermedia when appropriate (HATEOAS)`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['api-contract'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: true,
@@ -401,7 +434,14 @@ Guidelines:
 - Plan for observability from the start
 - Consider data consistency challenges
 - Document service contracts`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['api-contract', 'security-scan'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: true,
@@ -443,13 +483,13 @@ Guidelines:
 - Consider timeout and fallback strategies
 - Mock external services in tests`,
     tools: [
-      'readFile',
-      'writeFile',
-      'editFile',
+      'read_file',
+      'write_file',
+      'replace',
       'glob',
-      'grep',
-      'shell',
-      'webFetch',
+      'search_file_content',
+      'run_shell_command',
+      'web_fetch',
     ],
     qualityChecks: ['security-scan', 'secrets-detection'],
     maxFilesPerTask: 10,
@@ -490,7 +530,14 @@ Guidelines:
 - Add query complexity limits
 - Consider caching strategies
 - Document schema with descriptions`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['typescript', 'api-contract'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: false,
@@ -535,7 +582,14 @@ Guidelines:
 - Plan for data growth and partitioning
 - Implement soft deletes when needed
 - Document all columns and relationships`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['migration-safety', 'rls-coverage', 'index-analysis'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -575,7 +629,14 @@ Guidelines:
 - Use covering indexes when appropriate
 - Batch related queries
 - Implement query result caching where appropriate`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['index-analysis', 'performance-audit'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -613,7 +674,14 @@ Guidelines:
 - Document all migration steps
 - Consider migration performance impact
 - Validate data integrity after migration`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['migration-safety'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -658,7 +726,13 @@ Guidelines:
 - Implement proper session management
 - Follow principle of least privilege
 - Log security-relevant events`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['security-scan', 'secrets-detection', 'dependency-audit'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: true,
@@ -696,7 +770,7 @@ Guidelines:
 - Assess risk severity accurately
 - Suggest prioritized remediations
 - Consider business impact`,
-    tools: ['readFile', 'glob', 'grep', 'webFetch'],
+    tools: ['read_file', 'glob', 'search_file_content', 'web_fetch'],
     qualityChecks: ['security-scan'],
     maxFilesPerTask: 50,
     canSpawnSubAgents: false,
@@ -736,7 +810,7 @@ Guidelines:
 - Plan for data subject requests
 - Implement audit logging
 - Consider cross-border data transfers`,
-    tools: ['readFile', 'glob', 'grep'],
+    tools: ['read_file', 'glob', 'search_file_content'],
     qualityChecks: ['security-scan', 'secrets-detection'],
     maxFilesPerTask: 50,
     canSpawnSubAgents: false,
@@ -780,7 +854,14 @@ Guidelines:
 - Keep tests independent and fast
 - Use meaningful test descriptions
 - Avoid testing implementation details`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['test-coverage', 'test-quality'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: false,
@@ -819,7 +900,14 @@ Guidelines:
 - Use fixtures for test data
 - Record videos for debugging
 - Run E2E tests in CI pipeline`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['test-coverage', 'visual-regression'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: false,
@@ -858,7 +946,7 @@ Guidelines:
 - Acknowledge good patterns
 - Consider the author's context
 - Focus on the code, not the person`,
-    tools: ['readFile', 'glob', 'grep'],
+    tools: ['read_file', 'glob', 'search_file_content'],
     qualityChecks: ['complexity-analysis', 'duplication-detection'],
     maxFilesPerTask: 50,
     canSpawnSubAgents: false,
@@ -900,7 +988,14 @@ Guidelines:
 - Plan for rollback scenarios
 - Set up comprehensive monitoring
 - Document runbooks for incidents`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['security-scan', 'secrets-detection'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: true,
@@ -940,7 +1035,14 @@ Guidelines:
 - Tag all resources consistently
 - Plan for scaling
 - Document architecture decisions`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['security-scan', 'secrets-detection'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: true,
@@ -980,7 +1082,14 @@ Guidelines:
 - Implement proper secret handling
 - Add status checks for PRs
 - Document pipeline requirements`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['secrets-detection'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -1025,13 +1134,13 @@ Guidelines:
 - Implement proper caching
 - Add evaluation metrics`,
     tools: [
-      'readFile',
-      'writeFile',
-      'editFile',
+      'read_file',
+      'write_file',
+      'replace',
       'glob',
-      'grep',
-      'shell',
-      'webFetch',
+      'search_file_content',
+      'run_shell_command',
+      'web_fetch',
     ],
     qualityChecks: ['typescript', 'secrets-detection'],
     maxFilesPerTask: 15,
@@ -1071,7 +1180,14 @@ Guidelines:
 - Implement proper validation pipelines
 - Consider model drift detection
 - Document model lineage`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep', 'shell'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+      'run_shell_command',
+    ],
     qualityChecks: ['typescript'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: false,
@@ -1109,7 +1225,13 @@ Guidelines:
 - Consider edge cases in prompts
 - Test prompts with various inputs
 - Version and document prompts`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['documentation-coverage'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
@@ -1151,7 +1273,13 @@ Guidelines:
 - Use consistent terminology
 - Add diagrams for complex concepts
 - Include troubleshooting sections`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['documentation-coverage'],
     maxFilesPerTask: 15,
     canSpawnSubAgents: false,
@@ -1188,7 +1316,13 @@ Guidelines:
 - Document error responses
 - Keep examples up-to-date
 - Add rate limit information`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['api-contract', 'documentation-coverage'],
     maxFilesPerTask: 20,
     canSpawnSubAgents: false,
@@ -1226,7 +1360,13 @@ Guidelines:
 - Keep architecture docs updated
 - Link to related ADRs
 - Consider the audience (devs vs. stakeholders)`,
-    tools: ['readFile', 'writeFile', 'editFile', 'glob', 'grep'],
+    tools: [
+      'read_file',
+      'write_file',
+      'replace',
+      'glob',
+      'search_file_content',
+    ],
     qualityChecks: ['documentation-coverage'],
     maxFilesPerTask: 10,
     canSpawnSubAgents: false,
