@@ -38,6 +38,12 @@ const DEFAULT_CONFIG: AgentSelectorConfig = {
 };
 
 /**
+ * ID of the fallback agent that should only be used when no specialized agent matches.
+ * This agent is excluded from normal scoring and only selected as a last resort.
+ */
+const FALLBACK_AGENT_ID = 'general-assistant';
+
+/**
  * Agent Selector
  * Analyzes tasks and selects appropriate specialized agents
  */
@@ -50,21 +56,48 @@ export class AgentSelector {
 
   /**
    * Select agents for a given task
+   *
+   * The selection follows a strict fallback policy:
+   * 1. Score and filter ONLY specialized agents (excluding general-assistant)
+   * 2. If at least one specialized agent matches, use those
+   * 3. ONLY if NO specialized agent matches, fall back to general-assistant
+   *
+   * This ensures the general-assistant is truly a last resort.
    */
   selectAgents(taskDescription: string): AgentSelectionResult {
     const complexity = this.analyzeComplexity(taskDescription);
     const scores = this.scoreAgents(taskDescription);
     const maxAgents = this.getMaxAgentsForComplexity(complexity);
 
-    // Sort by score and filter
-    const sortedAgents = Array.from(scores.entries())
-      .filter(([_, score]) => score >= this.config.minScoreThreshold)
+    // Sort by score and filter, EXCLUDING the fallback agent from normal selection
+    const sortedSpecializedAgents = Array.from(scores.entries())
+      .filter(
+        ([id, score]) =>
+          id !== FALLBACK_AGENT_ID && score >= this.config.minScoreThreshold,
+      )
       .sort((a, b) => b[1] - a[1])
       .slice(0, maxAgents);
 
-    const selectedAgents = sortedAgents
+    let selectedAgents = sortedSpecializedAgents
       .map(([id]) => getAgentById(id))
       .filter((agent): agent is AgentSpecialization => agent !== undefined);
+
+    // FALLBACK: Only use general-assistant if NO specialized agent matched
+    if (selectedAgents.length === 0) {
+      const fallbackAgent = getAgentById(FALLBACK_AGENT_ID);
+      if (fallbackAgent) {
+        selectedAgents = [fallbackAgent];
+        // Update scores map to reflect fallback selection
+        scores.set(FALLBACK_AGENT_ID, 1); // Minimal score to indicate fallback
+
+        if (this.config.debug) {
+          console.log(
+            '[AgentSelector] No specialized agents matched, using fallback:',
+            FALLBACK_AGENT_ID,
+          );
+        }
+      }
+    }
 
     const reasoning = this.generateReasoning(
       taskDescription,
@@ -80,7 +113,10 @@ export class AgentSelector {
         '[AgentSelector] Selected:',
         selectedAgents.map((a) => a.id).join(', '),
       );
-      console.log('[AgentSelector] Scores:', Object.fromEntries(sortedAgents));
+      console.log(
+        '[AgentSelector] Scores:',
+        Object.fromEntries(sortedSpecializedAgents),
+      );
     }
 
     return {
@@ -174,12 +210,21 @@ export class AgentSelector {
 
   /**
    * Score all agents for a task
+   *
+   * Note: The fallback agent (general-assistant) is excluded from scoring
+   * because it should only be used when NO specialized agent matches.
+   * This prevents the priority-based scoring from accidentally boosting it.
    */
   private scoreAgents(taskDescription: string): Map<string, number> {
     const scores = new Map<string, number>();
     const words = this.tokenize(taskDescription);
 
     for (const agent of AGENT_REGISTRY) {
+      // Skip the fallback agent - it's handled separately in selectAgents()
+      if (agent.id === FALLBACK_AGENT_ID) {
+        continue;
+      }
+
       let score = 0;
 
       // Keyword matching
@@ -205,10 +250,12 @@ export class AgentSelector {
         score *= this.config.domainBoost;
       }
 
-      // Priority weight
-      score += agent.priority * 0.5;
+      // Priority weight - used as a TIE-BREAKER only (minimal contribution)
+      // This ensures agents with same keyword matches are ordered by priority,
+      // but priority alone cannot make an agent reach the minimum threshold
+      score += agent.priority * 0.01;
 
-      scores.set(agent.id, Math.round(score * 10) / 10);
+      scores.set(agent.id, Math.round(score * 100) / 100);
     }
 
     return scores;
@@ -251,7 +298,17 @@ export class AgentSelector {
     complexity: TaskComplexity,
   ): string {
     if (agents.length === 0) {
-      return 'No specialized agents matched the task. Using general-purpose approach.';
+      return 'No agents available to handle this task.';
+    }
+
+    // Check if we're using the fallback agent
+    const isFallback =
+      agents.length === 1 && agents[0].id === FALLBACK_AGENT_ID;
+    if (isFallback) {
+      return (
+        `Task complexity: ${complexity}. No specialized agents matched the task criteria. ` +
+        `Using fallback: ${agents[0].name} (general-purpose assistant).`
+      );
     }
 
     const agentDescriptions = agents.map((a) => {
@@ -260,7 +317,7 @@ export class AgentSelector {
     });
 
     return (
-      `Task complexity: ${complexity}. Selected ${agents.length} agent(s): ${agentDescriptions.join(' → ')}. ` +
+      `Task complexity: ${complexity}. Selected ${agents.length} specialized agent(s): ${agentDescriptions.join(' → ')}. ` +
       `Primary focus: ${agents[0].domain} domain.`
     );
   }
