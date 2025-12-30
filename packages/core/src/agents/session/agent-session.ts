@@ -237,7 +237,12 @@ export class AgentSession {
 
         // Parse response for text and tool calls
         const { text, toolCalls } = this.parseResponse(responseContent);
-        finalText = text;
+        // Accumulate text across iterations instead of overwriting
+        // This preserves text from earlier responses when tools are called
+        if (text) {
+          const separator = String.fromCharCode(10, 10); // Two newlines
+          finalText = finalText ? finalText + separator + text : text;
+        }
 
         // If no tool calls, we're done
         if (toolCalls.length === 0) {
