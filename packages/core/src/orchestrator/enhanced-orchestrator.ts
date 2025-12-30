@@ -337,93 +337,124 @@ export class EnhancedAgentOrchestrator {
         files: modifiedFiles,
       });
 
-      // Use FeedbackLoop to attempt automatic error correction
-      const feedbackResult = await this.feedbackLoop.run(
-        // Execute iteration: run validation pipeline
-        async () => {
-          const validationResult =
-            await this.validationPipeline.run(gateWorkingDir);
+      // Skip ValidationPipeline if no files were modified
+      // This prevents false-positive failures from pre-existing project errors
+      // when the agent only performed analysis without making changes
+      let feedbackResult: import('../feedback/feedback-loop.js').FeedbackLoopResult;
 
-          // Emit validation progress for each step
-          for (const step of validationResult.steps) {
-            await this.emitEvent(
-              'validation_progress',
-              `${step.step}: ${step.passed ? 'passed' : 'failed'} (${step.issues.length} issues)`,
-              {
-                validationStep: step.step,
-                success: step.passed,
-                error: step.issues
-                  .filter((i) => i.type === 'error')
-                  .map((i) => i.message)
-                  .join('; '),
-              },
-            );
-          }
+      if (modifiedFiles.length === 0) {
+        // No files modified - skip validation pipeline entirely
+        await this.emitEvent(
+          'validation_progress',
+          'No files modified, skipping validation pipeline',
+          {
+            validationStep: 'skip',
+            success: true,
+          },
+        );
 
-          // Collect all errors from validation steps
-          const allErrors = validationResult.steps.flatMap((step) =>
-            step.issues.filter((i) => i.type === 'error'),
-          );
+        feedbackResult = {
+          success: true,
+          iterations: 0,
+          maxIterations: this.feedbackLoop.getConfig().maxIterations,
+          maxIterationsReached: false,
+          totalDurationMs: 0,
+          iterationResults: [],
+          unresolvedErrors: [],
+          resolvedErrors: [],
+          summary: '✅ No files modified, validation skipped',
+        };
+      } else {
+        // Use FeedbackLoop to attempt automatic error correction
+        feedbackResult = await this.feedbackLoop.run(
+          // Execute iteration: run validation pipeline
+          async () => {
+            const validationResult =
+              await this.validationPipeline.run(gateWorkingDir);
 
-          // Record errors in memory for learning
-          for (const step of validationResult.steps) {
-            for (const issue of step.issues.filter((i) => i.type === 'error')) {
-              this.errorMemory.recordError({
-                id: `${step.step}_${issue.line || 0}`,
-                category: this.mapValidationCategory(step.step),
-                message: issue.message,
-                file: issue.file,
-                line: issue.line,
-                occurrenceCount: 1,
-                autoFixable: false,
-              });
+            // Emit validation progress for each step
+            for (const step of validationResult.steps) {
+              await this.emitEvent(
+                'validation_progress',
+                `${step.step}: ${step.passed ? 'passed' : 'failed'} (${step.issues.length} issues)`,
+                {
+                  validationStep: step.step,
+                  success: step.passed,
+                  error: step.issues
+                    .filter((i) => i.type === 'error')
+                    .map((i) => i.message)
+                    .join('; '),
+                },
+              );
             }
-          }
 
-          return {
-            success: validationResult.success,
-            errors: allErrors,
-          };
-        },
-        // Retry strategy: use agents to fix errors
-        async (errors, iteration, context) => {
-          if (errors.length === 0) return [];
+            // Collect all errors from validation steps
+            const allErrors = validationResult.steps.flatMap((step) =>
+              step.issues.filter((i) => i.type === 'error'),
+            );
 
-          // Build error summary for agents
-          const errorSummary = errors
-            .map(
-              (e) => `- ${e.file || 'unknown'}:${e.line || '?'}: ${e.message}`,
-            )
-            .join('\n');
+            // Record errors in memory for learning
+            for (const step of validationResult.steps) {
+              for (const issue of step.issues.filter(
+                (i) => i.type === 'error',
+              )) {
+                this.errorMemory.recordError({
+                  id: `${step.step}_${issue.line || 0}`,
+                  category: this.mapValidationCategory(step.step),
+                  message: issue.message,
+                  file: issue.file,
+                  line: issue.line,
+                  occurrenceCount: 1,
+                  autoFixable: false,
+                });
+              }
+            }
 
-          // Get recent errors from ErrorMemory to avoid repeating the same mistakes
-          const recentErrors = this.errorMemory.getRecentErrors(5);
-          const errorMemorySection =
-            recentErrors.length > 0
-              ? `
+            return {
+              success: validationResult.success,
+              errors: allErrors,
+            };
+          },
+          // Retry strategy: use agents to fix errors
+          async (errors, iteration, context) => {
+            if (errors.length === 0) return [];
+
+            // Build error summary for agents
+            const errorSummary = errors
+              .map(
+                (e) =>
+                  `- ${e.file || 'unknown'}:${e.line || '?'}: ${e.message}`,
+              )
+              .join('\n');
+
+            // Get recent errors from ErrorMemory to avoid repeating the same mistakes
+            const recentErrors = this.errorMemory.getRecentErrors(5);
+            const errorMemorySection =
+              recentErrors.length > 0
+                ? `
 ## PREVIOUS ERRORS (learn from these - do NOT repeat the same mistakes):
 ${recentErrors.map((e) => `- [${e.category}] ${e.file || 'unknown'}:${e.line || '?'}: ${e.message} (occurred ${e.occurrenceCount}x)`).join('\n')}
 `
-              : '';
+                : '';
 
-          // Get error patterns that keep occurring
-          const frequentErrors = recentErrors.filter(
-            (e) => e.occurrenceCount > 1,
-          );
-          const patternWarning =
-            frequentErrors.length > 0
-              ? `
+            // Get error patterns that keep occurring
+            const frequentErrors = recentErrors.filter(
+              (e) => e.occurrenceCount > 1,
+            );
+            const patternWarning =
+              frequentErrors.length > 0
+                ? `
 ⚠️ WARNING: The following errors have occurred multiple times. Pay special attention to fix them differently:
 ${frequentErrors.map((e) => `- ${e.message} (${e.occurrenceCount}x)`).join('\n')}
 `
-              : '';
+                : '';
 
-          // Generate error-specific instructions based on error categories
-          const errorCategories = new Set(errors.map((e) => e.category));
-          const errorSpecificInstructions =
-            this.generateErrorSpecificInstructions(errorCategories);
+            // Generate error-specific instructions based on error categories
+            const errorCategories = new Set(errors.map((e) => e.category));
+            const errorSpecificInstructions =
+              this.generateErrorSpecificInstructions(errorCategories);
 
-          const fixTask = `
+            const fixTask = `
 Fix the following validation errors (iteration ${iteration}/${this.feedbackLoop.getConfig().maxIterations}):
 
 ## CURRENT ERRORS TO FIX:
@@ -444,39 +475,40 @@ ${errorSpecificInstructions}
 5. Verify your changes don't introduce new errors
           `.trim();
 
-          // Re-execute relevant agents to fix errors
-          if (!plan) {
-            // No plan available, cannot re-execute agents
-            return [];
-          }
+            // Re-execute relevant agents to fix errors
+            if (!plan) {
+              // No plan available, cannot re-execute agents
+              return [];
+            }
 
-          for (const agentInfo of orderedAgents) {
-            const agent = getAgentById(agentInfo.agent.id);
-            if (!agent) continue;
+            for (const agentInfo of orderedAgents) {
+              const agent = getAgentById(agentInfo.agent.id);
+              if (!agent) continue;
 
-            // Only use agents that can help with the error types
-            const canHelp = this.agentCanFixErrors(agent, errors);
-            if (!canHelp) continue;
+              // Only use agents that can help with the error types
+              const canHelp = this.agentCanFixErrors(agent, errors);
+              if (!canHelp) continue;
 
-            const execution = await this.executeAgent(agent, fixTask, plan);
-            agentExecutions.push(execution);
-          }
+              const execution = await this.executeAgent(agent, fixTask, plan);
+              agentExecutions.push(execution);
+            }
 
-          return errors.map((error) => ({
-            errorId: error.id,
-            type: 'code_change' as const,
-            description: `Agent attempted fix for: ${error.message}`,
-            file: error.file,
-            success: false, // Will be determined by next validation
-          }));
-        },
-        // Context
-        {
-          previousIterations: [],
-          taskDescription: task,
-          workingDirectory: gateWorkingDir,
-        },
-      );
+            return errors.map((error) => ({
+              errorId: error.id,
+              type: 'code_change' as const,
+              description: `Agent attempted fix for: ${error.message}`,
+              file: error.file,
+              success: false, // Will be determined by next validation
+            }));
+          },
+          // Context
+          {
+            previousIterations: [],
+            taskDescription: task,
+            workingDirectory: gateWorkingDir,
+          },
+        );
+      } // End of else block (modifiedFiles.length > 0)
 
       // Run traditional quality gates after feedback loop
       const gateContext = {
