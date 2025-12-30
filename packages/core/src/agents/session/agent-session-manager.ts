@@ -120,11 +120,23 @@ export class AgentSessionManager {
       await this.cleanupOldestSession();
     }
 
+    // Filter tools based on agent's declared tool list to prevent context overflow
+    // Each agent declares which tools it needs (e.g., ['readFile', 'glob', 'grep'])
+    // Using all 100+ tools would exceed context limits for OpenAI-compatible providers
+    let agentTools: Tool[] = this.defaultTools;
+    if (this.toolRegistry && agent.tools && agent.tools.length > 0) {
+      const filteredDeclarations =
+        this.toolRegistry.getFunctionDeclarationsFiltered(agent.tools);
+      if (filteredDeclarations.length > 0) {
+        agentTools = [{ functionDeclarations: filteredDeclarations }];
+      }
+    }
+
     // Create new session
     const sessionConfig: AgentSessionConfig = {
       agent,
       workingDirectory: this.workingDirectory,
-      tools: this.defaultTools,
+      tools: agentTools,
       toolRegistry: this.toolRegistry,
     };
 
