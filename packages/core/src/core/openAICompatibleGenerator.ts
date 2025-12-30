@@ -42,6 +42,47 @@ export interface OpenAICompatibleConfig extends ContentGeneratorConfig {
 }
 
 /**
+ * Parameter aliasing for OpenAI-compatible models.
+ * Claude and other models may use different parameter names than Gemini tools expect.
+ * This maps common aliases to the canonical parameter names.
+ */
+const PARAM_ALIASES: Record<string, Record<string, string>> = {
+  write_file: { path: 'file_path' },
+  read_file: { path: 'file_path' },
+  replace: { path: 'file_path' },
+  list_directory: { path: 'directory_path' },
+  search_file_content: { path: 'directory_path', query: 'search_query' },
+  glob: { path: 'directory_path' },
+  run_shell_command: { cmd: 'command' },
+};
+
+/**
+ * Normalize tool call parameters by applying aliases.
+ * This ensures Claude's parameter names are mapped to Gemini tool expectations.
+ */
+function normalizeToolParams(
+  toolName: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const aliases = PARAM_ALIASES[toolName];
+  if (!aliases) return args;
+
+  const normalized = { ...args };
+  for (const [alias, canonical] of Object.entries(aliases)) {
+    if (alias in normalized && !(canonical in normalized)) {
+      normalized[canonical] = normalized[alias];
+      delete normalized[alias];
+      if (process.env['DEBUG_OPENAI_COMPAT'] === 'true') {
+        console.error(
+          `[DEBUG] Aliased param "${alias}" -> "${canonical}" for tool ${toolName}`,
+        );
+      }
+    }
+  }
+  return normalized;
+}
+
+/**
  * Maps Gemini model names to provider-specific model IDs
  */
 function mapModelName(model: string, baseUrl: string): string {
@@ -259,7 +300,7 @@ export function createOpenAICompatibleContentGenerator(
               parts.push({
                 functionCall: {
                   name: toolCall.name,
-                  args: parsedArgs,
+                  args: normalizeToolParams(toolCall.name, parsedArgs),
                   // Pass the tool call ID so it can be matched with the tool result
                   id: toolCallId,
                 },
@@ -699,7 +740,7 @@ function convertToGeminiResponse(
         parts.push({
           functionCall: {
             name: toolCall.function.name,
-            args,
+            args: normalizeToolParams(toolCall.function.name, args),
             // Pass the tool call ID so it can be matched with the tool result
             id: functionCallId,
           },
