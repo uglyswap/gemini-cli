@@ -110,16 +110,17 @@ function formatExecutionReport(report: ExecutionReport): string {
     lines.push(`### Agent Contributions (${executions.length})\n`);
     for (const execution of executions) {
       const agentStatus = execution.success ? '✓' : '✗';
-      const output = execution.output?.slice(0, 200) || 'No output';
-      const truncated = (execution.output?.length ?? 0) > 200 ? '...' : '';
+      // Show full agent output - don't truncate to allow complete responses
+      const output = execution.output || 'No output';
       lines.push(
-        `- **${execution.agentName || execution.agentId}** ${agentStatus}: ${output}${truncated}`,
+        `#### ${execution.agentName || execution.agentId} ${agentStatus}\n`,
       );
+      lines.push(output);
+      lines.push('');
       if (execution.error) {
-        lines.push(`  - Error: ${execution.error}`);
+        lines.push(`**Error:** ${execution.error}\n`);
       }
     }
-    lines.push('');
   }
 
   // Files modified (collect from all executions)
