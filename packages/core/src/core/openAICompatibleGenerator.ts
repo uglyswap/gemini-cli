@@ -57,28 +57,67 @@ const PARAM_ALIASES: Record<string, Record<string, string>> = {
 };
 
 /**
- * Normalize tool call parameters by applying aliases.
- * This ensures Claude's parameter names are mapped to Gemini tool expectations.
+ * Parameters that must be strings for each tool.
+ * If the model sends an object instead of a string, we serialize it to JSON.
+ * This fixes cases where Claude sends { content: {...} } instead of { content: "..." }
+ */
+const STRING_PARAMS: Record<string, string[]> = {
+  write_file: ['content', 'file_path'],
+  read_file: ['file_path'],
+  replace: ['file_path', 'old_string', 'new_string'],
+  run_shell_command: ['command'],
+  glob: ['pattern', 'directory_path'],
+  search_file_content: ['search_query', 'directory_path'],
+  list_directory: ['directory_path'],
+};
+
+/**
+ * Normalize tool call parameters by applying aliases and type coercion.
+ * This ensures Claude's parameter names are mapped to Gemini tool expectations
+ * and that parameters have the correct types (e.g., content must be string, not object).
  */
 function normalizeToolParams(
   toolName: string,
   args: Record<string, unknown>,
 ): Record<string, unknown> {
-  const aliases = PARAM_ALIASES[toolName];
-  if (!aliases) return args;
-
   const normalized = { ...args };
-  for (const [alias, canonical] of Object.entries(aliases)) {
-    if (alias in normalized && !(canonical in normalized)) {
-      normalized[canonical] = normalized[alias];
-      delete normalized[alias];
-      if (process.env['DEBUG_OPENAI_COMPAT'] === 'true') {
-        console.error(
-          `[DEBUG] Aliased param "${alias}" -> "${canonical}" for tool ${toolName}`,
-        );
+
+  // Step 1: Apply parameter name aliases
+  const aliases = PARAM_ALIASES[toolName];
+  if (aliases) {
+    for (const [alias, canonical] of Object.entries(aliases)) {
+      if (alias in normalized && !(canonical in normalized)) {
+        normalized[canonical] = normalized[alias];
+        delete normalized[alias];
+        if (process.env['DEBUG_OPENAI_COMPAT'] === 'true') {
+          console.error(
+            `[DEBUG] Aliased param "${alias}" -> "${canonical}" for tool ${toolName}`,
+          );
+        }
       }
     }
   }
+
+  // Step 2: Coerce object parameters to strings where required
+  // This fixes Claude sending { content: {...} } instead of { content: "..." }
+  const stringParams = STRING_PARAMS[toolName];
+  if (stringParams) {
+    for (const param of stringParams) {
+      if (param in normalized) {
+        const value = normalized[param];
+        if (value !== null && typeof value === 'object') {
+          // Serialize object to JSON string with nice formatting
+          normalized[param] = JSON.stringify(value, null, 2);
+          if (process.env['DEBUG_OPENAI_COMPAT'] === 'true') {
+            console.error(
+              `[DEBUG] Coerced object param "${param}" to JSON string for tool ${toolName}`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   return normalized;
 }
 
@@ -663,7 +702,40 @@ function convertToOpenAIFormat(
     })
     .flat() as OpenAI.Chat.ChatCompletionMessageParam[];
 
-  return result;
+  // Deduplicate tool results: Anthropic requires each tool_use to have exactly one tool_result.
+  // When a tool fails validation multiple times (e.g., WriteFile with invalid content),
+  // multiple tool results with the same ID accumulate in the history.
+  // Keep only the LAST result for each tool_call_id.
+  const seenToolCallIds = new Map<string, number>();
+  for (let i = result.length - 1; i >= 0; i--) {
+    const msg = result[i];
+    if (msg.role === 'tool' && 'tool_call_id' in msg) {
+      const toolCallId = msg.tool_call_id;
+      if (!seenToolCallIds.has(toolCallId)) {
+        seenToolCallIds.set(toolCallId, i);
+      }
+    }
+  }
+
+  // Filter out duplicate tool results (keep only the last one per ID)
+  const deduplicatedResult = result.filter((msg, index) => {
+    if (msg.role === 'tool' && 'tool_call_id' in msg) {
+      const toolCallId = msg.tool_call_id;
+      return seenToolCallIds.get(toolCallId) === index;
+    }
+    return true;
+  });
+
+  if (
+    process.env['DEBUG_OPENAI_COMPAT'] === 'true' &&
+    deduplicatedResult.length !== result.length
+  ) {
+    console.error(
+      `[DEBUG] Deduplicated tool results: ${result.length} -> ${deduplicatedResult.length} messages`,
+    );
+  }
+
+  return deduplicatedResult;
 }
 
 function convertTools(
